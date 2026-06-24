@@ -1,0 +1,83 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+---
+
+<AdminLayout title="Gesture">
+  <section class="page-header">
+    <h1>Gesture</h1>
+    <p class="subtitle">Configure gesture triggers and responses for the kiosk.</p>
+  </section>
+
+  <section class="card">
+    <h2>Mapped Gestures</h2>
+    <div class="placeholder-list">
+      <div class="placeholder-item">
+        <span class="item-label">👋 Wave</span>
+        <span class="item-value">Start selfie countdown</span>
+      </div>
+      <div class="placeholder-item">
+        <span class="item-label">✌️ Peace</span>
+        <span class="item-value">Apply peace filter</span>
+      </div>
+      <div class="placeholder-item">
+        <span class="item-label">👍 Thumbs Up</span>
+        <span class="item-value">Confirm & send</span>
+      </div>
+    </div>
+    <p class="placeholder-note">Gesture mapping editor coming when detection model is integrated.</p>
+  </section>
+</AdminLayout>
+
+<style>
+  .page-header {
+    margin-bottom: 2rem;
+  }
+  .page-header h1 {
+    margin: 0 0 0.25rem;
+    font-size: 1.5rem;
+    font-weight: 600;
+  }
+  .subtitle {
+    margin: 0;
+    color: #8b8fa3;
+    font-size: 0.875rem;
+  }
+  .card {
+    background: #1a1d27;
+    border: 1px solid #2a2d37;
+    border-radius: 8px;
+    padding: 1.5rem;
+  }
+  .card h2 {
+    margin: 0 0 1rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #c0c4d0;
+  }
+  .placeholder-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .placeholder-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem 0.75rem;
+    background: #0f1117;
+    border-radius: 6px;
+    font-size: 0.875rem;
+  }
+  .item-label {
+    color: #8b8fa3;
+  }
+  .item-value {
+    color: #e1e4ea;
+    font-family: monospace;
+  }
+  .placeholder-note {
+    margin: 1rem 0 0;
+    color: #5b5f73;
+    font-size: 0.8rem;
+    font-style: italic;
+  }
+</style>

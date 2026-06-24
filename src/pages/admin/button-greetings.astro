@@ -1,0 +1,79 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+---
+
+<AdminLayout title="Button Greetings">
+  <section class="page-header">
+    <h1>Button Greetings</h1>
+    <p class="subtitle">Configure kiosk greeting messages triggered by button press.</p>
+  </section>
+
+  <section class="card">
+    <h2>Active Greetings</h2>
+    <div class="placeholder-list">
+      <div class="placeholder-item">
+        <span class="item-label">Default</span>
+        <span class="item-value">"Hi there! Want to take a selfie?"</span>
+      </div>
+      <div class="placeholder-item">
+        <span class="item-label">Happy Hour</span>
+        <span class="item-value">"Smile time! 😄"</span>
+      </div>
+    </div>
+    <p class="placeholder-note">Greeting editor coming soon.</p>
+  </section>
+</AdminLayout>
+
+<style>
+  .page-header {
+    margin-bottom: 2rem;
+  }
+  .page-header h1 {
+    margin: 0 0 0.25rem;
+    font-size: 1.5rem;
+    font-weight: 600;
+  }
+  .subtitle {
+    margin: 0;
+    color: #8b8fa3;
+    font-size: 0.875rem;
+  }
+  .card {
+    background: #1a1d27;
+    border: 1px solid #2a2d37;
+    border-radius: 8px;
+    padding: 1.5rem;
+  }
+  .card h2 {
+    margin: 0 0 1rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #c0c4d0;
+  }
+  .placeholder-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .placeholder-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem 0.75rem;
+    background: #0f1117;
+    border-radius: 6px;
+    font-size: 0.875rem;
+  }
+  .item-label {
+    color: #8b8fa3;
+  }
+  .item-value {
+    color: #e1e4ea;
+    font-family: monospace;
+  }
+  .placeholder-note {
+    margin: 1rem 0 0;
+    color: #5b5f73;
+    font-size: 0.8rem;
+    font-style: italic;
+  }
+</style>

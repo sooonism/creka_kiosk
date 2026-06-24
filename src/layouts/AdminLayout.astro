@@ -1,0 +1,70 @@
+---
+export interface Props {
+  title: string;
+}
+const { title } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title} — Creka Kiosk Admin</title>
+  </head>
+  <body>
+    <nav class="admin-nav">
+      <a href="/admin/button-greetings" class="nav-link">Button Greetings</a>
+      <a href="/admin/camwithme" class="nav-link">CamWithMe</a>
+      <a href="/admin/gesture" class="nav-link">Gesture</a>
+      <a href="/" class="nav-link home">← Main</a>
+    </nav>
+    <main>
+      <slot />
+    </main>
+  </body>
+</html>
+
+<style is:global>
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #0f1117;
+    color: #e1e4ea;
+    min-height: 100vh;
+  }
+  .admin-nav {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: #1a1d27;
+    border-bottom: 1px solid #2a2d37;
+    align-items: center;
+  }
+  .nav-link {
+    color: #8b8fa3;
+    text-decoration: none;
+    padding: 0.375rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    transition: background 0.15s, color 0.15s;
+  }
+  .nav-link:hover {
+    background: #2a2d37;
+    color: #e1e4ea;
+  }
+  .nav-link.home {
+    margin-left: auto;
+    color: #5b5f73;
+  }
+  main {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+  }
+</style>
