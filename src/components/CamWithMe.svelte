@@ -119,32 +119,112 @@
     const ctx = canvas.getContext("2d")!;
     const w = canvas.width;
     const h = canvas.height;
-
     ctx.clearRect(0, 0, w, h);
 
-    if (!result.faceLandmarks) return;
-
-    for (const landmarks of result.faceLandmarks) {
-      // Draw connections (face mesh)
-      drawFaceMesh(ctx, landmarks, w, h);
-
-      // Draw landmark dots
-      for (const lm of landmarks) {
-        const x = lm.x * w;
-        const y = lm.y * h;
-        ctx.beginPath();
-        ctx.arc(x, y, 1.5, 0, Math.PI * 2);
-        ctx.fillStyle = "#00ff88";
-        ctx.fill();
+    // --- draw mirrored face mesh ---
+    if (result.faceLandmarks) {
+      for (const landmarks of result.faceLandmarks) {
+        drawFaceMesh(ctx, landmarks, w, h, true);
+        for (const lm of landmarks) {
+          const x = w - lm.x * w;  // mirrored x
+          const y = lm.y * h;
+          ctx.beginPath();
+          ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+          ctx.fillStyle = "#00ff88";
+          ctx.fill();
+        }
       }
     }
+
+    // --- overlay draws (not mirrored) ---
+    drawVersionBadge(ctx, w, h);
+    drawFaceIndicator(ctx, w, h, result.faceLandmarks?.length ?? 0);
+    drawCamStatusBar(ctx, w, h);
+  }
+
+  function drawVersionBadge(ctx: CanvasRenderingContext2D, w: number, h: number) {
+    ctx.save();
+    ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+    ctx.beginPath();
+    ctx.roundRect(12, 12, 56, 24, 6);
+    ctx.fill();
+    ctx.fillStyle = "#666";
+    ctx.font = "11px monospace";
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "center";
+    ctx.fillText("v0.1.0", 12 + 28, 12 + 12);
+    ctx.restore();
+  }
+
+  function drawFaceIndicator(ctx: CanvasRenderingContext2D, w: number, h: number, count: number) {
+    const padding = 16;
+    const cardW = 200;
+    const cardH = 44;
+    const x = w - padding - cardW;
+    const y = padding + 8;
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.4)";
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+    ctx.beginPath();
+    ctx.roundRect(x, y, cardW, cardH, 10);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    if (count === 0) {
+      ctx.fillStyle = "#555";
+      ctx.font = "14px system-ui, -apple-system, sans-serif";
+      ctx.textBaseline = "middle";
+      ctx.fillText("😶  No face detected", x + 12, y + cardH / 2);
+    } else {
+      ctx.fillStyle = "#8b8fa3";
+      ctx.font = "14px system-ui, -apple-system, sans-serif";
+      ctx.textBaseline = "middle";
+      ctx.fillText(`😀  ${count} face${count > 1 ? "s" : ""}`, x + 12, y + cardH / 2);
+      // green dot
+      ctx.fillStyle = "#00ff88";
+      ctx.beginPath();
+      ctx.arc(x + cardW - 20, y + cardH / 2, 6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawCamStatusBar(ctx: CanvasRenderingContext2D, w: number, h: number) {
+    const barH = 32;
+    const pad = 12;
+    const fpsText = `${fps} fps`;
+    const dotText = faceCount > 0 ? "●" : "○";
+    const statusText = `${dotText}  ${status}`;
+    ctx.font = "13px monospace";
+    const statusW = ctx.measureText(statusText).width;
+    const fpsW = ctx.measureText(fpsText).width;
+    const barW = statusW + fpsW + pad * 4;
+    const bx = (w - barW) / 2;
+    const by = h - 48;
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.4)";
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+    ctx.beginPath();
+    ctx.roundRect(bx, by, barW, barH, 16);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = faceCount > 0 ? "#00ff88" : "#555";
+    ctx.textBaseline = "middle";
+    ctx.fillText(dotText, bx + pad, by + barH / 2);
+    ctx.fillStyle = "#ccc";
+    ctx.fillText(status, bx + pad + 16, by + barH / 2);
+    ctx.fillStyle = "#666";
+    ctx.fillText(fpsText, bx + barW - pad - fpsW, by + barH / 2);
+    ctx.restore();
   }
 
   function drawFaceMesh(
     ctx: CanvasRenderingContext2D,
     landmarks: any[],
     w: number,
-    h: number
+    h: number,
+    mirrored: boolean = false
   ) {
     // MediaPipe Face Landmarker connections (indices)
     // Face oval
@@ -185,8 +265,10 @@
       const b = landmarks[connections[i + 1]];
       if (!a || !b) continue;
       ctx.beginPath();
-      ctx.moveTo(a.x * w, a.y * h);
-      ctx.lineTo(b.x * w, b.y * h);
+      const ax = mirrored ? w - a.x * w : a.x * w;
+      const bx2 = mirrored ? w - b.x * w : b.x * w;
+      ctx.moveTo(ax, a.y * h);
+      ctx.lineTo(bx2, b.y * h);
       ctx.stroke();
     }
   }
@@ -218,15 +300,6 @@
       <div class="overlay-icon">⚠️</div>
       <div class="overlay-text">{error}</div>
     </div>
-  {:else}
-    <div class="status-bar">
-      <span class="status-dot" class:active={faceCount > 0}></span>
-      <span>{status}</span>
-      <span class="fps">{fps} fps</span>
-      {#if faceCount > 0}
-        <span class="face-count">{faceCount} face{faceCount > 1 ? "s" : ""}</span>
-      {/if}
-    </div>
   {/if}
 </div>
 
@@ -253,7 +326,6 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transform: scaleX(-1); /* mirror to match video */
     pointer-events: none;
   }
 
@@ -275,40 +347,5 @@
     font-size: 1.2rem;
   }
 
-  .status-bar {
-    position: absolute;
-    bottom: 2rem;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.5rem 1rem;
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(8px);
-    border-radius: 999px;
-    color: #ccc;
-    font-size: 0.8rem;
-    font-family: monospace;
-  }
 
-  .status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #555;
-    transition: background 0.2s;
-  }
-  .status-dot.active {
-    background: #00ff88;
-    box-shadow: 0 0 8px #00ff88;
-  }
-
-  .fps {
-    color: #888;
-  }
-  .face-count {
-    color: #00ff88;
-    font-weight: 600;
-  }
 </style>

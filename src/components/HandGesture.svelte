@@ -146,7 +146,8 @@
       }
     }
 
-    // --- draw indicator overlays (NOT mirrored — live above the mirrored feed) ---
+    // --- overlay draws (not mirrored — live above the mirrored feed) ---
+    drawVersionBadge(ctx, w, h);
     drawIndicators(ctx, w, h);
     drawStatusBar(ctx, w, h);
   }
@@ -172,6 +173,19 @@
         y += cardH + gap;
       }
     }
+  }
+
+  function drawVersionBadge(ctx: CanvasRenderingContext2D, w: number, h: number) {
+    ctx.save();
+    ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+    ctx.beginPath();
+    ctx.roundRect(12, 12, 56, 24, 6);
+    ctx.fill();
+    ctx.fillStyle = "#666";
+    ctx.font = "11px monospace";
+    ctx.textBaseline = "middle";
+    ctx.fillText("v0.1.0", 12 + 28, 12 + 12);
+    ctx.restore();
   }
 
   function drawCard(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, text: string, color: string) {
