@@ -40,15 +40,10 @@
 
   async function initMediaPipe() {
     const { FilesetResolver, HandLandmarker } = await import("@mediapipe/tasks-vision");
-
     status = "Loading hand model...";
     const vision = await FilesetResolver.forVisionTasks(WASM_CDN);
-
     handLandmarkerInstance = await HandLandmarker.createFromOptions(vision, {
-      baseOptions: {
-        modelAssetPath: MODEL_URL,
-        delegate: "GPU",
-      },
+      baseOptions: { modelAssetPath: MODEL_URL, delegate: "GPU" },
       runningMode: "VIDEO",
       numHands: 2,
     });
@@ -67,17 +62,13 @@
   function startDetectionLoop() {
     function detect() {
       if (!running) return;
-
       if (handLandmarkerInstance && video.readyState >= 2) {
         const now = performance.now();
         const result = handLandmarkerInstance.detectForVideo(video, now);
-
         handCount = result.landmarks?.length ?? 0;
         handedness = (result.handedness ?? []).map((h: any) => h[0]?.categoryName ?? "?");
         gestures = classifyGestures(result.landmarks);
-
         drawResults(result);
-
         frameCount++;
         if (now - lastFpsUpdate > 1000) {
           fps = Math.round((frameCount * 1000) / (now - lastFpsUpdate));
@@ -85,10 +76,8 @@
           lastFpsUpdate = now;
         }
       }
-
       requestAnimationFrame(detect);
     }
-
     requestAnimationFrame(detect);
   }
 
@@ -96,55 +85,25 @@
     if (!hands) return [];
     return hands.map((landmarks) => {
       if (landmarks.length < 21) return "unknown";
-
       const lm = (i: number) => landmarks[i];
-
-      // Finger states: 0 = curled, 1 = extended
-      const fingerExtended = (tip: number, pip: number, mcp: number): number => {
-        // For thumb we compare tip to IP joint differently
-        return lm(tip).y < lm(pip).y ? 1 : 0;
-      };
-
-      // Thumb: compare tip (4) to IP (3) — uses x for cross-hand comparison
       const thumbExtended = lm(4).x < lm(3).x ? 1 : 0;
-
-      // Other fingers: tip.y < pip.y means extended (when hand is upright)
-      const indexExt  = fingerExtended(8, 6, 5);
-      const middleExt = fingerExtended(12, 10, 9);
-      const ringExt   = fingerExtended(16, 14, 13);
-      const pinkyExt  = fingerExtended(20, 18, 17);
-
+      const fingerExtended = (tip: number, pip: number) => (lm(tip).y < lm(pip).y ? 1 : 0);
+      const indexExt  = fingerExtended(8, 6);
+      const middleExt = fingerExtended(12, 10);
+      const ringExt   = fingerExtended(16, 14);
+      const pinkyExt  = fingerExtended(20, 18);
       const fingers = [thumbExtended, indexExt, middleExt, ringExt, pinkyExt];
       const extCount = fingers.reduce((a, b) => a + b, 0);
-
-      // ✊ Fist
       if (extCount === 0) return "✊ Fist";
-
-      // 🖐️ Open palm
       if (extCount === 5) return "🖐️ Palm";
-
-      // ✌️ Peace / Victory
       if (indexExt && middleExt && !ringExt && !pinkyExt) return "✌️ Peace";
-
-      // 👍 Thumbs up
       if (thumbExtended && !indexExt && !middleExt && !ringExt && !pinkyExt) return "👍 Thumbs up";
-
-      // 👎 Thumbs down (thumb extended but y > IP)
       if (lm(4).y > lm(3).y && !indexExt && !middleExt && !ringExt && !pinkyExt) return "👎 Thumbs down";
-
-      // 🤙 Call me (pinky + thumb)
       if (thumbExtended && !indexExt && !middleExt && !ringExt && pinkyExt) return "🤙 Call me";
-
-      // 🤘 Rock (index + pinky)
       if (indexExt && !middleExt && !ringExt && pinkyExt) return "🤘 Rock";
-
-      // ☝️ Point up
       if (indexExt && !middleExt && !ringExt && !pinkyExt) return "☝️ Point";
-
-      // 🤏 Pinch (thumb tip close to index tip)
       const thumbIndexDist = Math.hypot(lm(4).x - lm(8).x, lm(4).y - lm(8).y, lm(4).z - lm(8).z);
       if (thumbIndexDist < 0.06 && extCount <= 2) return "🤏 Pinch";
-
       return `${extCount} up`;
     });
   }
@@ -155,36 +114,131 @@
     const h = canvas.height;
     ctx.clearRect(0, 0, w, h);
 
-    if (!result.landmarks) return;
+    // --- draw mirrored skeleton ---
+    // We mirror x coordinates here so the skeleton matches the CSS-mirrored video
+    if (result.landmarks) {
+      const CONNECTIONS = [
+        [0, 1],[1, 2],[2, 3],[3, 4],
+        [0, 5],[5, 6],[6, 7],[7, 8],
+        [0, 9],[9,10],[10,11],[11,12],
+        [0,13],[13,14],[14,15],[15,16],
+        [0,17],[17,18],[18,19],[19,20],
+        [5, 9],[9,13],[13,17],
+      ];
 
-    const CONNECTIONS = [
-      [0, 1], [1, 2], [2, 3], [3, 4],           // thumb
-      [0, 5], [5, 6], [6, 7], [7, 8],           // index
-      [0, 9], [9, 10], [10, 11], [11, 12],      // middle
-      [0, 13], [13, 14], [14, 15], [15, 16],    // ring
-      [0, 17], [17, 18], [18, 19], [19, 20],    // pinky
-      [5, 9], [9, 13], [13, 17],                // palm connections
-    ];
+      for (const landmarks of result.landmarks) {
+        const mx = (x: number) => w - x * w; // mirror x
 
-    for (const landmarks of result.landmarks) {
-      // Draw connections
-      ctx.strokeStyle = "rgba(0, 200, 255, 0.6)";
-      ctx.lineWidth = 2;
-      for (const [a, b] of CONNECTIONS) {
-        ctx.beginPath();
-        ctx.moveTo(landmarks[a].x * w, landmarks[a].y * h);
-        ctx.lineTo(landmarks[b].x * w, landmarks[b].y * h);
-        ctx.stroke();
-      }
-
-      // Draw joint dots
-      for (const lm of landmarks) {
-        ctx.beginPath();
-        ctx.arc(lm.x * w, lm.y * h, 3, 0, Math.PI * 2);
-        ctx.fillStyle = "#00ccff";
-        ctx.fill();
+        ctx.strokeStyle = "rgba(0, 200, 255, 0.6)";
+        ctx.lineWidth = 2;
+        for (const [a, b] of CONNECTIONS) {
+          ctx.beginPath();
+          ctx.moveTo(mx(landmarks[a].x), landmarks[a].y * h);
+          ctx.lineTo(mx(landmarks[b].x), landmarks[b].y * h);
+          ctx.stroke();
+        }
+        for (const lm of landmarks) {
+          ctx.beginPath();
+          ctx.arc(mx(lm.x), lm.y * h, 3, 0, Math.PI * 2);
+          ctx.fillStyle = "#00ccff";
+          ctx.fill();
+        }
       }
     }
+
+    // --- draw indicator overlays (NOT mirrored — live above the mirrored feed) ---
+    drawIndicators(ctx, w, h);
+    drawStatusBar(ctx, w, h);
+  }
+
+  function drawIndicators(ctx: CanvasRenderingContext2D, w: number, h: number) {
+    const padding = 16;
+    const cardW = 180;
+    const cardH = 44;
+    const gap = 8;
+    const x = w - padding - cardW;
+    let y = padding;
+
+    if (handCount === 0) {
+      drawCard(ctx, x, y, cardW, cardH, "🖐️  Show your hand", "#555");
+    } else {
+      for (let i = 0; i < handCount; i++) {
+        const icon = handedness[i] === "Right" ? "👉" : "👈";
+        const label = `${handedness[i] ?? "?"} hand`;
+        const gesture = gestures[i] ?? "...";
+        drawCard(ctx, x, y, cardW, cardH, `${icon}  ${label}`, "#8b8fa3");
+        // gesture badge next to the card
+        drawGestureBadge(ctx, x + cardW + 6, y, cardH, gesture);
+        y += cardH + gap;
+      }
+    }
+  }
+
+  function drawCard(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, text: string, color: string) {
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.4)";
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 10);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = color;
+    ctx.font = "14px system-ui, -apple-system, sans-serif";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, x + 12, y + h / 2);
+    ctx.restore();
+  }
+
+  function drawGestureBadge(ctx: CanvasRenderingContext2D, x: number, y: number, h: number, gesture: string) {
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.4)";
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = "rgba(0, 200, 255, 0.15)";
+    ctx.beginPath();
+    ctx.roundRect(x, y, 120, h, 10);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#00ccff";
+    ctx.font = "bold 14px system-ui, -apple-system, sans-serif";
+    ctx.textBaseline = "middle";
+    ctx.fillText(gesture, x + 12, y + h / 2);
+    ctx.restore();
+  }
+
+  function drawStatusBar(ctx: CanvasRenderingContext2D, w: number, h: number) {
+    const barH = 32;
+    const pad = 12;
+    const fpsText = `${fps} fps`;
+    const dotText = handCount > 0 ? "●" : "○";
+    const statusText = `${dotText}  ${status}`;
+    ctx.font = "13px monospace";
+
+    const statusW = ctx.measureText(statusText).width;
+    const fpsW = ctx.measureText(fpsText).width;
+    const barW = statusW + fpsW + pad * 4;
+    const bx = (w - barW) / 2;
+    const by = h - 48;
+
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.4)";
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = "rgba(0, 0, 0, 0.55)";
+    ctx.beginPath();
+    ctx.roundRect(bx, by, barW, barH, 16);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    ctx.fillStyle = handCount > 0 ? "#00ccff" : "#555";
+    ctx.textBaseline = "middle";
+    ctx.fillText(dotText, bx + pad, by + barH / 2);
+
+    ctx.fillStyle = "#ccc";
+    ctx.fillText(status, bx + pad + 16, by + barH / 2);
+
+    ctx.fillStyle = "#666";
+    ctx.fillText(fpsText, bx + barW - pad - fpsW, by + barH / 2);
+    ctx.restore();
   }
 
   function handleVideoResize() {
@@ -211,30 +265,6 @@
       <div class="overlay-icon">⚠️</div>
       <div class="overlay-text">{error}</div>
     </div>
-  {:else}
-    <!-- Gesture indicator badges -->
-    <div class="gesture-indicators">
-      {#if handCount === 0}
-        <div class="indicator idle">
-          <span class="icon">🖐️</span>
-          <span>Show your hand</span>
-        </div>
-      {:else}
-        {#each Array(handCount) as _, i}
-          <div class="indicator active">
-            <span class="hand-icon">{handedness[i] === "Right" ? "👉" : "👈"}</span>
-            <span class="hand-label">{handedness[i] ?? "?"} hand</span>
-            <span class="gesture-badge">{gestures[i] ?? "..."}</span>
-          </div>
-        {/each}
-      {/if}
-    </div>
-
-    <div class="status-bar">
-      <span class="status-dot" class:active={handCount > 0}></span>
-      <span>{status}</span>
-      <span class="fps">{fps} fps</span>
-    </div>
   {/if}
 </div>
 
@@ -245,7 +275,6 @@
     background: #000;
     overflow: hidden;
   }
-
   .gesture-video {
     position: absolute;
     inset: 0;
@@ -254,17 +283,14 @@
     object-fit: cover;
     transform: scaleX(-1);
   }
-
   .gesture-canvas {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transform: scaleX(-1);
     pointer-events: none;
   }
-
   .overlay {
     position: absolute;
     inset: 0;
@@ -281,79 +307,5 @@
   .overlay-text {
     color: #f87171;
     font-size: 1.2rem;
-  }
-
-  .gesture-indicators {
-    position: absolute;
-    top: 1.5rem;
-    right: 1.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .indicator {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 1rem;
-    border-radius: 12px;
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(8px);
-    font-size: 0.9rem;
-    transition: all 0.2s;
-  }
-  .indicator.idle {
-    color: #888;
-  }
-  .indicator.active {
-    color: #e1e4ea;
-    border: 1px solid rgba(0, 200, 255, 0.3);
-  }
-  .hand-icon {
-    font-size: 1.2rem;
-  }
-  .hand-label {
-    color: #8b8fa3;
-    font-size: 0.8rem;
-  }
-  .gesture-badge {
-    background: rgba(0, 200, 255, 0.15);
-    color: #00ccff;
-    padding: 0.15rem 0.5rem;
-    border-radius: 6px;
-    font-weight: 600;
-    font-size: 0.8rem;
-  }
-
-  .status-bar {
-    position: absolute;
-    bottom: 2rem;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.5rem 1rem;
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(8px);
-    border-radius: 999px;
-    color: #ccc;
-    font-size: 0.8rem;
-    font-family: monospace;
-  }
-  .status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #555;
-    transition: background 0.2s;
-  }
-  .status-dot.active {
-    background: #00ccff;
-    box-shadow: 0 0 8px #00ccff;
-  }
-  .fps {
-    color: #888;
   }
 </style>
