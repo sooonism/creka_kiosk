@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
 
-  let video: HTMLVideoElement;
   let canvas: HTMLCanvasElement;
   let status = $state("Initializing...");
   let handCount = $state(0);
@@ -9,6 +8,9 @@
   let gestures = $state<string[]>([]);
   let fps = $state(0);
   let error = $state<string | null>(null);
+
+  // Hidden video element — created in JS, never appended to DOM
+  let video: HTMLVideoElement | null = null;
   let stream: MediaStream | null = null;
 
   let handLandmarkerInstance: any;
@@ -35,6 +37,10 @@
   onDestroy(() => {
     running = false;
     if (stream) stream.getTracks().forEach((t) => t.stop());
+    if (video) {
+      video.pause();
+      video.srcObject = null;
+    }
     if (handLandmarkerInstance) handLandmarkerInstance.close();
   });
 
@@ -55,20 +61,34 @@
       video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
       audio: false,
     });
+
+    // Hidden video — never appended to DOM
+    video = document.createElement("video");
     video.srcObject = stream;
+    video.playsInline = true;
+    video.muted = true;
+    video.autoplay = true;
     await video.play();
+
+    setCanvasSize();
+  }
+
+  function setCanvasSize() {
+    if (!video || !canvas) return;
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
   }
 
   function startDetectionLoop() {
     function detect() {
-      if (!running) return;
+      if (!running || !video) return;
       if (handLandmarkerInstance && video.readyState >= 2) {
         const now = performance.now();
         const result = handLandmarkerInstance.detectForVideo(video, now);
         handCount = result.landmarks?.length ?? 0;
         handedness = (result.handedness ?? []).map((h: any) => h[0]?.categoryName ?? "?");
         gestures = classifyGestures(result.landmarks);
-        drawResults(result);
+        drawFrame(result);
         frameCount++;
         if (now - lastFpsUpdate > 1000) {
           fps = Math.round((frameCount * 1000) / (now - lastFpsUpdate));
@@ -108,14 +128,19 @@
     });
   }
 
-  function drawResults(result: any) {
+  function drawFrame(result: any) {
+    if (!video) return;
     const ctx = canvas.getContext("2d")!;
     const w = canvas.width;
     const h = canvas.height;
-    ctx.clearRect(0, 0, w, h);
 
-    // --- draw mirrored skeleton ---
-    // We mirror x coordinates here so the skeleton matches the CSS-mirrored video
+    // 1. Mirrored camera feed
+    ctx.save();
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, -w, 0, w, h);
+    ctx.restore();
+
+    // 2. Hand skeleton (mirrored coords to match)
     if (result.landmarks) {
       const CONNECTIONS = [
         [0, 1],[1, 2],[2, 3],[3, 4],
@@ -127,26 +152,24 @@
       ];
 
       for (const landmarks of result.landmarks) {
-        const mx = (x: number) => w - x * w; // mirror x
-
         ctx.strokeStyle = "rgba(0, 200, 255, 0.6)";
         ctx.lineWidth = 2;
         for (const [a, b] of CONNECTIONS) {
           ctx.beginPath();
-          ctx.moveTo(mx(landmarks[a].x), landmarks[a].y * h);
-          ctx.lineTo(mx(landmarks[b].x), landmarks[b].y * h);
+          ctx.moveTo(w - landmarks[a].x * w, landmarks[a].y * h);
+          ctx.lineTo(w - landmarks[b].x * w, landmarks[b].y * h);
           ctx.stroke();
         }
         for (const lm of landmarks) {
           ctx.beginPath();
-          ctx.arc(mx(lm.x), lm.y * h, 3, 0, Math.PI * 2);
+          ctx.arc(w - lm.x * w, lm.y * h, 3, 0, Math.PI * 2);
           ctx.fillStyle = "#00ccff";
           ctx.fill();
         }
       }
     }
 
-    // --- overlay draws (not mirrored — live above the mirrored feed) ---
+    // 3. HUD overlays
     drawVersionBadge(ctx, w, h);
     drawIndicators(ctx, w, h);
     drawStatusBar(ctx, w, h);
@@ -168,7 +191,6 @@
         const label = `${handedness[i] ?? "?"} hand`;
         const gesture = gestures[i] ?? "...";
         drawCard(ctx, x, y, cardW, cardH, `${icon}  ${label}`, "#8b8fa3");
-        // gesture badge next to the card
         drawGestureBadge(ctx, x + cardW + 6, y, cardH, gesture);
         y += cardH + gap;
       }
@@ -184,7 +206,7 @@
     ctx.fillStyle = "#666";
     ctx.font = "11px monospace";
     ctx.textBaseline = "middle";
-    ctx.fillText("v0.1.0", 12 + 28, 12 + 12);
+    ctx.fillText("v0.2.0", 12 + 28, 12 + 12);
     ctx.restore();
   }
 
@@ -254,24 +276,10 @@
     ctx.fillText(fpsText, bx + barW - pad - fpsW, by + barH / 2);
     ctx.restore();
   }
-
-  function handleVideoResize() {
-    if (!video || !canvas) return;
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
-  }
 </script>
 
 <div class="gesture-container">
-  <video
-    bind:this={video}
-    class="gesture-video"
-    autoplay
-    playsinline
-    onloadedmetadata={handleVideoResize}
-    onresize={handleVideoResize}
-  ></video>
-
+  <!-- Only the canvas renders — video lives in JS memory, never in the DOM -->
   <canvas bind:this={canvas} class="gesture-canvas"></canvas>
 
   {#if error}
@@ -289,22 +297,15 @@
     background: #000;
     overflow: hidden;
   }
-  .gesture-video {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    transform: scaleX(-1);
-  }
+
   .gesture-canvas {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
-    pointer-events: none;
   }
+
   .overlay {
     position: absolute;
     inset: 0;

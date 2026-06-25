@@ -1,26 +1,25 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
 
-  let video: HTMLVideoElement;
   let canvas: HTMLCanvasElement;
   let status = $state("Initializing camera...");
   let faceCount = $state(0);
   let landmarksCount = $state(0);
   let fps = $state(0);
   let error = $state<string | null>(null);
+
+  // Hidden video element — created in JS, never appended to DOM
+  let video: HTMLVideoElement | null = null;
   let stream: MediaStream | null = null;
 
   // Detection state
-  let detectionInterval: ReturnType<typeof setInterval> | null = null;
   let frameCount = 0;
   let lastFpsUpdate = 0;
 
-  // MediaPipe types
-  let FaceLandmarkerClass: any;
+  // MediaPipe
   let faceLandmarkerInstance: any;
   let running = true;
 
-  // Model CDN path
   const MODEL_URL =
     "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task";
   const WASM_CDN = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm";
@@ -39,9 +38,12 @@
 
   onDestroy(() => {
     running = false;
-    if (detectionInterval) clearInterval(detectionInterval);
     if (stream) {
       stream.getTracks().forEach((t) => t.stop());
+    }
+    if (video) {
+      video.pause();
+      video.srcObject = null;
     }
     if (faceLandmarkerInstance) faceLandmarkerInstance.close();
   });
@@ -50,8 +52,6 @@
     const { FilesetResolver, FaceLandmarker } = await import(
       "@mediapipe/tasks-vision"
     );
-    FaceLandmarkerClass = FaceLandmarker;
-
     status = "Loading face model...";
     const vision = await FilesetResolver.forVisionTasks(WASM_CDN);
 
@@ -64,11 +64,10 @@
       numFaces: 4,
       outputFaceBlendshapes: false,
       outputFacialTransformationMatrixes: false,
-      resultCallback: null, // we pull results synchronously
+      resultCallback: null,
     });
 
-    landmarksCount =
-      faceLandmarkerInstance.faceLandmarksCount ?? 468;
+    landmarksCount = faceLandmarkerInstance.faceLandmarksCount ?? 468;
   }
 
   async function initCamera() {
@@ -81,15 +80,30 @@
       },
       audio: false,
     });
+
+    // Create hidden video element in JS only — never added to DOM
+    video = document.createElement("video");
     video.srcObject = stream;
+    video.playsInline = true;
+    video.muted = true;
+    video.autoplay = true;
     await video.play();
+
+    // Sync canvas dimensions
+    setCanvasSize();
+  }
+
+  function setCanvasSize() {
+    if (!video || !canvas) return;
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
   }
 
   function startDetectionLoop() {
     let animId: number;
 
     function detect() {
-      if (!running) return;
+      if (!running || !video) return;
 
       if (faceLandmarkerInstance && video.readyState >= 2) {
         const now = performance.now();
@@ -97,10 +111,9 @@
 
         faceCount = result.faceLandmarks?.length ?? 0;
 
-        // Draw on canvas
-        drawResults(result);
+        // Single canvas: mirrored video + mesh + HUD
+        drawFrame(result);
 
-        // FPS counter
         frameCount++;
         if (now - lastFpsUpdate > 1000) {
           fps = Math.round((frameCount * 1000) / (now - lastFpsUpdate));
@@ -115,18 +128,24 @@
     animId = requestAnimationFrame(detect);
   }
 
-  function drawResults(result: any) {
+  function drawFrame(result: any) {
+    if (!video) return;
     const ctx = canvas.getContext("2d")!;
     const w = canvas.width;
     const h = canvas.height;
-    ctx.clearRect(0, 0, w, h);
 
-    // --- draw mirrored face mesh ---
+    // 1. Mirrored camera feed
+    ctx.save();
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, -w, 0, w, h);
+    ctx.restore();
+
+    // 2. Face mesh (mirrored coords to match)
     if (result.faceLandmarks) {
       for (const landmarks of result.faceLandmarks) {
-        drawFaceMesh(ctx, landmarks, w, h, true);
+        drawFaceMesh(ctx, landmarks, w, h);
         for (const lm of landmarks) {
-          const x = w - lm.x * w;  // mirrored x
+          const x = w - lm.x * w;
           const y = lm.y * h;
           ctx.beginPath();
           ctx.arc(x, y, 1.5, 0, Math.PI * 2);
@@ -136,7 +155,7 @@
       }
     }
 
-    // --- overlay draws (not mirrored) ---
+    // 3. HUD overlays
     drawVersionBadge(ctx, w, h);
     drawFaceIndicator(ctx, w, h, result.faceLandmarks?.length ?? 0);
     drawCamStatusBar(ctx, w, h);
@@ -152,7 +171,7 @@
     ctx.font = "11px monospace";
     ctx.textBaseline = "middle";
     ctx.textAlign = "center";
-    ctx.fillText("v0.1.0", 12 + 28, 12 + 12);
+    ctx.fillText("v0.2.0", 12 + 28, 12 + 12);
     ctx.restore();
   }
 
@@ -180,7 +199,6 @@
       ctx.font = "14px system-ui, -apple-system, sans-serif";
       ctx.textBaseline = "middle";
       ctx.fillText(`😀  ${count} face${count > 1 ? "s" : ""}`, x + 12, y + cardH / 2);
-      // green dot
       ctx.fillStyle = "#00ff88";
       ctx.beginPath();
       ctx.arc(x + cardW - 20, y + cardH / 2, 6, 0, Math.PI * 2);
@@ -223,31 +241,20 @@
     ctx: CanvasRenderingContext2D,
     landmarks: any[],
     w: number,
-    h: number,
-    mirrored: boolean = false
+    h: number
   ) {
-    // MediaPipe Face Landmarker connections (indices)
-    // Face oval
     const faceOval = [
       10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379,
       378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127,
       162, 21, 54, 103, 67, 109, 10,
     ];
-    // Left eye
     const leftEye = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246, 33];
-    // Right eye
     const rightEye = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398, 362];
-    // Lips
     const lips = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 409, 270, 269, 267, 0, 37, 39, 40, 185, 61];
-    // Left eyebrow
     const leftEyebrow = [46, 53, 52, 65, 55, 70, 63, 105, 66, 107];
-    // Right eyebrow
     const rightEyebrow = [276, 283, 282, 295, 285, 300, 293, 334, 296, 336];
-    // Nose bridge
     const noseBridge = [168, 6, 197, 195, 5, 4, 1, 19, 94, 2];
-    // Nose bottom
     const noseBottom = [141, 135, 169, 175, 217, 219, 197, 2, 97, 98, 99, 100, 101, 115, 141];
-    // Irises
     const leftIris = [468, 469, 470, 471];
     const rightIris = [472, 473, 474, 475];
 
@@ -265,36 +272,17 @@
       const b = landmarks[connections[i + 1]];
       if (!a || !b) continue;
       ctx.beginPath();
-      const ax = mirrored ? w - a.x * w : a.x * w;
-      const bx2 = mirrored ? w - b.x * w : b.x * w;
-      ctx.moveTo(ax, a.y * h);
-      ctx.lineTo(bx2, b.y * h);
+      ctx.moveTo(w - a.x * w, a.y * h);
+      ctx.lineTo(w - b.x * w, b.y * h);
       ctx.stroke();
     }
-  }
-
-  function handleVideoResize() {
-    if (!video || !canvas) return;
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
   }
 </script>
 
 <div class="cam-container">
-  <!-- Hidden video captures camera feed -->
-  <video
-    bind:this={video}
-    class="cam-video"
-    autoplay
-    playsinline
-    on:loadedmetadata={handleVideoResize}
-    on:resize={handleVideoResize}
-  ></video>
-
-  <!-- Overlay canvas for face mesh -->
+  <!-- Only the canvas renders — video lives in JS memory, never in the DOM -->
   <canvas bind:this={canvas} class="cam-canvas"></canvas>
 
-  <!-- Status overlay -->
   {#if error}
     <div class="overlay error">
       <div class="overlay-icon">⚠️</div>
@@ -311,22 +299,12 @@
     overflow: hidden;
   }
 
-  .cam-video {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    transform: scaleX(-1); /* mirror for selfie feel */
-  }
-
   .cam-canvas {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
-    pointer-events: none;
   }
 
   .overlay {
@@ -337,6 +315,7 @@
     align-items: center;
     justify-content: center;
     background: rgba(0, 0, 0, 0.8);
+    z-index: 10;
   }
   .overlay.error .overlay-icon {
     font-size: 3rem;
@@ -346,6 +325,4 @@
     color: #f87171;
     font-size: 1.2rem;
   }
-
-
 </style>
