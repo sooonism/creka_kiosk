@@ -1,27 +1,48 @@
 ---
 export interface Props {
   title: string;
+  fullscreen?: boolean;
 }
-const { title } = Astro.props;
+const { title, fullscreen = false } = Astro.props;
+const pathname = Astro.url.pathname;
 ---
 
 <!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="generator" content={Astro.generator} />
     <title>{title} — Creka Kiosk Admin</title>
   </head>
-  <body>
+  <body class:list={{ fullscreen }}>
     <nav class="admin-nav">
-      <a href="/admin/button-greetings" class="nav-link">Button Greetings</a>
-      <a href="/admin/camwithme" class="nav-link">CamWithMe</a>
-      <a href="/admin/gesture" class="nav-link">Gesture</a>
+      <a href="/admin/button_greetings" class="nav-link" class:active={pathname === "/admin/button_greetings/"}>Button Greetings</a>
+      <a href="/admin/camwithme" class="nav-link" class:active={pathname === "/admin/camwithme/"}>CamWithMe</a>
+      <a href="/admin/gesture" class="nav-link" class:active={pathname === "/admin/gesture/"}>Gesture</a>
+      <a href="/admin/hand_face" class="nav-link" class:active={pathname === "/admin/hand_face/"}>Hand Face</a>
+      <a href="/admin/pose" class="nav-link" class:active={pathname === "/admin/pose/"}>Pose</a>
+      <a href="/admin/finger_puppet" class="nav-link" class:active={pathname === "/admin/finger_puppet/"}>FP v1</a>
+      <a href="/admin/finger_puppet_v2" class="nav-link" class:active={pathname === "/admin/finger_puppet_v2/"}>FP v2</a>
+      <a href="/admin/gesture2" class="nav-link" class:active={pathname === "/admin/gesture2/"}>Gesture 2</a>
+      <a href="/admin/scanline" class="nav-link" class:active={pathname === "/admin/scanline/"}>Scanline</a>
+      <a href="/admin/human_counter" class="nav-link" class:active={pathname === "/admin/human_counter/"}>Human Counter</a>
+      <a href="/admin/zone_detect" class="nav-link" class:active={pathname === "/admin/zone_detect/"}>Zone Detect</a>
+      <a href="/admin/gaze_detect" class="nav-link" class:active={pathname === "/admin/gaze_detect/"}>Gaze Detect</a>
+      <a href="/admin/human_seg" class="nav-link" class:active={pathname === "/admin/human_seg/"}>Human Seg</a>
+      <a href="/admin/face_halftone" class="nav-link" class:active={pathname === "/admin/face_halftone/"}>Face Halftone</a>
+      <a href="/admin/drag_paint" class="nav-link" class:active={pathname === "/admin/drag_paint/"}>Drag Paint</a>
+      <a href="/admin/finger_paint" class="nav-link" class:active={pathname === "/admin/finger_paint/"}>Finger Paint</a>
+      <a href="/admin/perf_debug" class="nav-link" class:active={pathname === "/admin/perf_debug/"}>🎛 Perf Debug</a>
+      <a href="/admin/step_test" class="nav-link" class:active={pathname === "/admin/step_test/"}>Step Test</a>
+      <a href="/admin/slide_show" class="nav-link" class:active={pathname === "/admin/slide_show/"}>Slide Show</a>
+      <a href="/admin/camwithips/gooseday" class="nav-link" class:active={pathname === "/admin/camwithips/gooseday/"}>Gooseday</a>
+      <a href="/admin/camwithips/peeyong" class="nav-link" class:active={pathname === "/admin/camwithips/peeyong/"}>Peeyong</a>
+      <a href="/admin/camwithips/dreamocity" class="nav-link" class:active={pathname === "/admin/camwithips/dreamocity/"}>Dreamocity</a>
       <a href="/" class="nav-link home">← Main</a>
     </nav>
-    <main>
+    <main class:list={{ fullscreen }}>
       <slot />
     </main>
   </body>
@@ -38,25 +59,45 @@ const { title } = Astro.props;
     color: #e1e4ea;
     min-height: 100vh;
   }
+  body.fullscreen {
+    overflow: hidden;
+  }
   .admin-nav {
     display: flex;
-    gap: 0.5rem;
-    padding: 0.75rem 1rem;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    padding: 0.5rem 0.75rem;
     background: #1a1d27;
     border-bottom: 1px solid #2a2d37;
     align-items: center;
   }
+  @media (min-width: 768px) {
+    .admin-nav {
+      gap: 0.5rem;
+      padding: 0.75rem 1rem;
+    }
+  }
   .nav-link {
     color: #8b8fa3;
     text-decoration: none;
-    padding: 0.375rem 0.75rem;
+    padding: 0.3rem 0.5rem;
     border-radius: 6px;
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     transition: background 0.15s, color 0.15s;
+  }
+  @media (min-width: 768px) {
+    .nav-link {
+      padding: 0.375rem 0.75rem;
+      font-size: 0.875rem;
+    }
   }
   .nav-link:hover {
     background: #2a2d37;
     color: #e1e4ea;
+  }
+  .nav-link.active {
+    background: rgba(167, 139, 250, 0.15);
+    color: #a78bfa;
   }
   .nav-link.home {
     margin-left: auto;
@@ -66,5 +107,12 @@ const { title } = Astro.props;
     max-width: 960px;
     margin: 0 auto;
     padding: 2rem 1rem;
+  }
+  main.fullscreen {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    position: relative;
+    overflow: hidden;
   }
 </style>

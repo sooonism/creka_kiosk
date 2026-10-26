@@ -1,0 +1,8 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import HumanCounter from '../../components/HumanCounter.svelte';
+---
+
+<AdminLayout title="Human Counter" fullscreen>
+  <HumanCounter client:load />
+</AdminLayout>

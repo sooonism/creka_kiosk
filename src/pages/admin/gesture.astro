@@ -1,5 +1,8 @@
 ---
+import AdminLayout from '../../layouts/AdminLayout.astro';
 import HandGesture from '../../components/HandGesture.svelte';
 ---
 
-<HandGesture client:load />
+<AdminLayout title="Hand Gesture" fullscreen>
+  <HandGesture client:load />
+</AdminLayout>

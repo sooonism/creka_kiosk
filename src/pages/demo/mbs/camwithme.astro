@@ -1,0 +1,9 @@
+---
+import Layout from '../../../layouts/Layout.astro';
+import NkobOverlay from '../../../components/NkobOverlay.svelte';
+import nkob from '../../../assets/nkob.png';
+---
+
+<Layout>
+  <NkobOverlay src={nkob.src} client:load />
+</Layout>

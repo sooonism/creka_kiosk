@@ -1,0 +1,9 @@
+---
+import Layout from '../../../layouts/Layout.astro';
+import CamWithNkob from '../../../components/CamWithNkob.svelte';
+import nkob from '../../../assets/nkob.png';
+---
+
+<Layout>
+  <CamWithNkob src={nkob.src} client:load />
+</Layout>

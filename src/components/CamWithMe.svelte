@@ -1,10 +1,25 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
 
+  let {
+    onFaceCount,
+    onFacePosition,
+    onFaceSize,
+    onReady,
+    debug = true,
+    aspect = 0,
+  }: {
+    onFaceCount?: (count: number) => void;
+    onFacePosition?: (normalizedX: number) => void;
+    onFaceSize?: (normalizedWidth: number) => void; // face box width / frame width
+    onReady?: (canvas: HTMLCanvasElement) => void;
+    debug?: boolean; // face boxes/keypoints + HUD overlays on the canvas
+    aspect?: number; // w/h; crops the feed to this ratio and letterboxes it instead of cover-filling the screen (0 = off)
+  } = $props();
+
   let canvas: HTMLCanvasElement;
   let status = $state("Initializing camera...");
   let faceCount = $state(0);
-  let landmarksCount = $state(0);
   let fps = $state(0);
   let error = $state<string | null>(null);
 
@@ -12,62 +27,119 @@
   let video: HTMLVideoElement | null = null;
   let stream: MediaStream | null = null;
 
+  // source crop rect in video pixels (full frame unless aspect)
+  let crop = { x: 0, y: 0, w: 640, h: 480 };
+
   // Detection state
   let frameCount = 0;
   let lastFpsUpdate = 0;
 
   // MediaPipe
-  let faceLandmarkerInstance: any;
+  let faceDetectorInstance: any;
   let running = true;
 
-  const MODEL_URL =
-    "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task";
-  const WASM_CDN = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm";
+  // vendored in public/mediapipe/ (copied from node_modules/@mediapipe/tasks-vision/wasm) so the kiosk doesn't need the network
+  const MODEL_URL = "/mediapipe/blaze_face_short_range.tflite";
+  const WASM_URL = "/mediapipe/";
 
-  onMount(async () => {
-    try {
-      await initMediaPipe();
-      await initCamera();
-      status = "Ready — looking for faces";
-      startDetectionLoop();
-    } catch (e) {
-      error = e instanceof Error ? e.message : "Unknown error";
-      status = "Failed to start";
-    }
+  const STALL_MS = 3000; // no new video frame for this long -> restart the camera
+  let starting = false;
+  let loopStarted = false;
+  let watchdog: any;
+  let lastVideoTime = -1;
+  let lastVideoChange = 0;
+  const DETECT_MS = 100; // ~10 detections/s is plenty for presence + position
+  let lastDetect = 0;
+  let lastResult: any = {};
+
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  onMount(() => {
+    onReady?.(canvas);
+    start();
+    watchdog = setInterval(checkHealth, 1000);
   });
 
   onDestroy(() => {
     running = false;
-    if (stream) {
-      stream.getTracks().forEach((t) => t.stop());
-    }
+    clearInterval(watchdog);
+    releaseCamera();
+    if (faceDetectorInstance) faceDetectorInstance.close();
+  });
+
+  function releaseCamera() {
+    stream?.getTracks().forEach((t) => t.stop());
+    stream = null;
     if (video) {
       video.pause();
       video.srcObject = null;
+      video = null;
     }
-    if (faceLandmarkerInstance) faceLandmarkerInstance.close();
-  });
+  }
+
+  // Camera first (so a model problem can't take it down), retry forever with capped backoff
+  async function start() {
+    if (starting) return;
+    starting = true;
+    for (let attempt = 0; running; attempt++) {
+      try {
+        await initCamera();
+        if (!faceDetectorInstance) await initMediaPipe();
+        if (!running) break;
+        error = null;
+        status = "Ready — looking for faces";
+        lastVideoTime = -1;
+        lastVideoChange = performance.now();
+        if (!loopStarted) {
+          loopStarted = true;
+          startDetectionLoop();
+        }
+        break;
+      } catch (e) {
+        error = e instanceof Error ? e.message : "Unknown error";
+        status = `Retrying (${attempt + 1})...`;
+        releaseCamera();
+        await sleep(Math.min(1000 * 2 ** attempt, 10000));
+      }
+    }
+    starting = false;
+  }
+
+  // track ended (unplug/power save) or video frozen -> tear down and restart
+  function checkHealth() {
+    if (starting || !running || !video || !stream) return;
+    const track = stream.getTracks()[0];
+    const now = performance.now();
+    if (video.currentTime !== lastVideoTime) {
+      lastVideoTime = video.currentTime;
+      lastVideoChange = now;
+    }
+    if (track?.readyState === "ended" || now - lastVideoChange > STALL_MS) {
+      status = "Camera lost — restarting...";
+      onFaceCount?.(0); // don't leave a stale "face present" while the feed is down
+      releaseCamera();
+      start();
+    }
+  }
 
   async function initMediaPipe() {
-    const { FilesetResolver, FaceLandmarker } = await import(
+    const { FilesetResolver, FaceDetector } = await import(
       "@mediapipe/tasks-vision"
     );
     status = "Loading face model...";
-    const vision = await FilesetResolver.forVisionTasks(WASM_CDN);
+    const vision = await FilesetResolver.forVisionTasks(WASM_URL);
 
-    faceLandmarkerInstance = await FaceLandmarker.createFromOptions(vision, {
-      baseOptions: {
-        modelAssetPath: MODEL_URL,
-        delegate: "GPU",
-      },
-      runningMode: "VIDEO",
-      numFaces: 4,
-      outputFaceBlendshapes: false,
-      outputFacialTransformationMatrixes: false,
-      resultCallback: null,
-    });
-
-    landmarksCount = faceLandmarkerInstance.faceLandmarksCount ?? 468;
+    const create = (delegate: "GPU" | "CPU") =>
+      FaceDetector.createFromOptions(vision, {
+        baseOptions: { modelAssetPath: MODEL_URL, delegate },
+        runningMode: "VIDEO",
+        minDetectionConfidence: 0.5,
+      });
+    try {
+      faceDetectorInstance = await create("GPU");
+    } catch {
+      faceDetectorInstance = await create("CPU"); // GPU delegate unavailable
+    }
   }
 
   async function initCamera() {
@@ -80,6 +152,7 @@
       },
       audio: false,
     });
+    if (!running) return releaseCamera();
 
     // Create hidden video element in JS only — never added to DOM
     video = document.createElement("video");
@@ -95,24 +168,51 @@
 
   function setCanvasSize() {
     if (!video || !canvas) return;
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 480;
+    const vw = video.videoWidth || 640;
+    const vh = video.videoHeight || 480;
+    crop = { x: 0, y: 0, w: vw, h: vh };
+    if (aspect) {
+      if (vw / vh > aspect) {
+        crop.w = Math.round(vh * aspect);
+        crop.x = (vw - crop.w) / 2;
+      } else {
+        crop.h = Math.round(vw / aspect);
+        crop.y = (vh - crop.h) / 2;
+      }
+    }
+    canvas.width = crop.w;
+    canvas.height = crop.h;
   }
 
   function startDetectionLoop() {
     let animId: number;
 
     function detect() {
-      if (!running || !video) return;
+      if (!running) return;
+      animId = requestAnimationFrame(detect); // scheduled first so a throw below can't kill the loop
 
-      if (faceLandmarkerInstance && video.readyState >= 2) {
+      try {
+        if (!faceDetectorInstance || !video || video.readyState < 2) return;
         const now = performance.now();
-        const result = faceLandmarkerInstance.detectForVideo(video, now);
 
-        faceCount = result.faceLandmarks?.length ?? 0;
+        // detection is the slow part: run it throttled, but paint the video every frame
+        if (now - lastDetect >= DETECT_MS) {
+          lastDetect = now;
+          lastResult = faceDetectorInstance.detectForVideo(video, now);
+          faceCount = lastResult.detections?.length ?? 0;
+          onFaceCount?.(faceCount);
 
-        // Single canvas: mirrored video + mesh + HUD
-        drawFrame(result);
+          const box = lastResult.detections?.[0]?.boundingBox;
+          if (box && canvas.width) {
+            // mirrored on screen, so flip the raw center before normalizing
+            const mirroredCenterX = crop.w - (box.originX + box.width / 2 - crop.x);
+            onFacePosition?.(mirroredCenterX / crop.w);
+            onFaceSize?.(box.width / crop.w);
+          }
+        }
+
+        // Single canvas: mirrored video + bbox/keypoints + HUD
+        drawFrame(lastResult);
 
         frameCount++;
         if (now - lastFpsUpdate > 1000) {
@@ -120,9 +220,9 @@
           frameCount = 0;
           lastFpsUpdate = now;
         }
+      } catch (e) {
+        console.error("detect frame failed", e);
       }
-
-      animId = requestAnimationFrame(detect);
     }
 
     animId = requestAnimationFrame(detect);
@@ -137,27 +237,21 @@
     // 1. Mirrored camera feed
     ctx.save();
     ctx.scale(-1, 1);
-    ctx.drawImage(video, -w, 0, w, h);
+    ctx.drawImage(video, crop.x, crop.y, crop.w, crop.h, -w, 0, w, h);
     ctx.restore();
 
-    // 2. Face mesh (mirrored coords to match)
-    if (result.faceLandmarks) {
-      for (const landmarks of result.faceLandmarks) {
-        drawFaceMesh(ctx, landmarks, w, h);
-        for (const lm of landmarks) {
-          const x = w - lm.x * w;
-          const y = lm.y * h;
-          ctx.beginPath();
-          ctx.arc(x, y, 1.5, 0, Math.PI * 2);
-          ctx.fillStyle = "#00ff88";
-          ctx.fill();
-        }
+    if (!debug) return;
+
+    // 2. Face boxes + keypoints (mirrored coords to match)
+    if (result.detections) {
+      for (const detection of result.detections) {
+        drawFaceBox(ctx, detection, w, h);
       }
     }
 
     // 3. HUD overlays
     drawVersionBadge(ctx, w, h);
-    drawFaceIndicator(ctx, w, h, result.faceLandmarks?.length ?? 0);
+    drawFaceIndicator(ctx, w, h, result.detections?.length ?? 0);
     drawCamStatusBar(ctx, w, h);
   }
 
@@ -237,51 +331,34 @@
     ctx.restore();
   }
 
-  function drawFaceMesh(
+  function drawFaceBox(
     ctx: CanvasRenderingContext2D,
-    landmarks: any[],
+    detection: any,
     w: number,
     h: number
   ) {
-    const faceOval = [
-      10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379,
-      378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127,
-      162, 21, 54, 103, 67, 109, 10,
-    ];
-    const leftEye = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246, 33];
-    const rightEye = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398, 362];
-    const lips = [61, 146, 91, 181, 84, 17, 314, 405, 321, 375, 291, 409, 270, 269, 267, 0, 37, 39, 40, 185, 61];
-    const leftEyebrow = [46, 53, 52, 65, 55, 70, 63, 105, 66, 107];
-    const rightEyebrow = [276, 283, 282, 295, 285, 300, 293, 334, 296, 336];
-    const noseBridge = [168, 6, 197, 195, 5, 4, 1, 19, 94, 2];
-    const noseBottom = [141, 135, 169, 175, 217, 219, 197, 2, 97, 98, 99, 100, 101, 115, 141];
-    const leftIris = [468, 469, 470, 471];
-    const rightIris = [472, 473, 474, 475];
+    const box = detection.boundingBox;
+    if (box) {
+      const x = w - box.originX - box.width; // mirror
+      ctx.strokeStyle = "#00ff88";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x, box.originY, box.width, box.height);
+    }
 
-    const connections = [
-      ...faceOval, ...leftEye, ...rightEye, ...lips,
-      ...leftEyebrow, ...rightEyebrow, ...noseBridge, ...noseBottom,
-      ...leftIris, ...rightIris,
-    ];
-
-    ctx.strokeStyle = "rgba(0, 255, 136, 0.5)";
-    ctx.lineWidth = 1;
-
-    for (let i = 0; i < connections.length - 1; i++) {
-      const a = landmarks[connections[i]];
-      const b = landmarks[connections[i + 1]];
-      if (!a || !b) continue;
+    for (const kp of detection.keypoints ?? []) {
+      const x = w - kp.x * w;
+      const y = kp.y * h;
       ctx.beginPath();
-      ctx.moveTo(w - a.x * w, a.y * h);
-      ctx.lineTo(w - b.x * w, b.y * h);
-      ctx.stroke();
+      ctx.arc(x, y, 3, 0, Math.PI * 2);
+      ctx.fillStyle = "#00ff88";
+      ctx.fill();
     }
   }
 </script>
 
 <div class="cam-container">
   <!-- Only the canvas renders — video lives in JS memory, never in the DOM -->
-  <canvas bind:this={canvas} class="cam-canvas"></canvas>
+  <canvas bind:this={canvas} class="cam-canvas" class:fixed={!!aspect} style:--aspect={aspect || null}></canvas>
 
   {#if error}
     <div class="overlay error">
@@ -305,6 +382,17 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+  }
+
+  .cam-canvas.fixed {
+    inset: auto;
+    top: 50%;
+    left: 50%;
+    width: min(100vw - 40px, (100vh - 40px) * var(--aspect)); /* 20px padding all round */
+    height: auto;
+    aspect-ratio: var(--aspect);
+    transform: translate(-50%, -50%);
+    object-fit: contain;
   }
 
   .overlay {
