@@ -105,6 +105,35 @@
   $effect(() => {
     localStorage.setItem("nkob-countdown-y", String(countdownY));
   });
+  // idle: fade past polaroids in and out, 3 random ones at a time, each tilted a bit
+  let idleShots = $state<{ src: string; r: number }[]>([]);
+  let idleShow = $state(false);
+  $effect(() => {
+    if (stage !== "idle") return;
+    let alive = true;
+    let t: any;
+    const wait = (ms: number) => new Promise((r) => (t = setTimeout(r, ms)));
+    (async () => {
+      const ids: string[] = await fetch("/api/captures").then((r) => r.json()).catch(() => []);
+      while (alive && ids.length) {
+        idleShots = [...ids]
+          .sort(() => Math.random() - 0.5)
+          .slice(0, 3)
+          .map((id) => ({ src: `/captures/demo/camwithnkob/${id}.png`, r: rand(-8, 8) }));
+        await wait(100); // let the new images mount at opacity 0 so the fade-in runs
+        idleShow = true;
+        await wait(4000);
+        idleShow = false;
+        await wait(1500); // fade-out (1s) + a short gap
+      }
+    })();
+    return () => {
+      alive = false;
+      clearTimeout(t);
+      idleShow = false;
+    };
+  });
+
   let stageTimer: any = null;
   let countTimer: any = null;
 
@@ -329,6 +358,12 @@
     alt="Nkob"
   />
   <div class="cover-text">{stage === "greet" ? "hello!" : stage === "waking" ? "waking up..." : "idling..."}</div>
+</div>
+
+<div class="idle-shots" class:show={idleShow}>
+  {#each idleShots as shot}
+    <img src={shot.src} alt="Past shot" style:transform="rotate({shot.r}deg)" />
+  {/each}
 </div>
 
 {#if stage === "countdown"}
@@ -673,6 +708,30 @@
     transform: translate(calc(100% + 10vw), -50%);
     transition: transform 1s ease;
     pointer-events: none;
+  }
+  .idle-shots {
+    position: fixed;
+    /* same row as .recent: its images sit above a QR (8.2vw + 1vh gap) */
+    bottom: calc(8vh + 8.2vw);
+    left: 50%;
+    z-index: 35; /* above the idle cover (30), below the countdown (40) */
+    display: flex;
+    gap: 2vw;
+    transform: translateX(-50%);
+    opacity: 0;
+    transition: opacity 1s ease;
+    pointer-events: none;
+  }
+  .idle-shots.show {
+    opacity: 1;
+  }
+  .idle-shots img {
+    width: 18vw;
+    max-width: none;
+    max-height: none;
+    border-radius: 4px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+    transition: none;
   }
   .recent {
     position: fixed;
