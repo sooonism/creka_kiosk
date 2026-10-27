@@ -7,11 +7,11 @@
   let faceDetected = $state(false);
   let faceOnRight = $state(false);
   // livecam nkob cycles to the next image each time he switches sides; add more here
-  const NKOB_POSES = ["/img/demo/camwithnkob/pose1.png", "/img/demo/camwithnkob/pose2.png"];
+  const NKOB_POSES = [1, 2, 3, 4, 5].map((n) => `/img/demo/camwithnkob/pose${n}.png`);
   let poseIdx = $state(0);
   const COVER_IMG = {
-    idle: "/img/demo/camwithnkob/sleep1.png",
-    waking: "/img/demo/camwithnkob/wakeup.png",
+    idle: "/img/demo/camwithnkob/sleep_a.svg",
+    waking: "/img/demo/camwithnkob/wakeup_a.svg",
     greet: "/img/demo/camwithnkob/greet.png",
   };
   let camCanvas: HTMLCanvasElement | null = null;
@@ -38,7 +38,7 @@
     pose.y = 40;
   };
   const nextPose = () => {
-    poseIdx = (poseIdx + 1) % NKOB_POSES.length;
+    poseIdx = (poseIdx + rand(1, NKOB_POSES.length - 1)) % NKOB_POSES.length; // random, never the same pose twice in a row
     rerollPose();
   };
   let lastZoneChange = 0;
@@ -58,6 +58,7 @@
   let flashOpacity = $state(0);
   let flashTransitioning = $state(false);
   let capturedSrc = $state<string | null>(null);
+  let recentShots = $state<{ src: string; qr: string | null }[]>([]); // latest 3, shown along the bottom on snapped
   let capturedPhase = $state<"hidden" | "shown" | "exiting">("hidden");
   let capturedInstant = $state(false);
   let capturedExitTimer: any = null;
@@ -116,7 +117,7 @@
     }
     stage = next;
     if (next === "snapped") triggerFlash();
-    if (next === "reveal") rerollPose();
+    if (next === "reveal") nextPose();
     if (mode === "debug") return; // debug: stages only change by clicking
     if (next === "waking") {
       stageTimer = setTimeout(() => setStage("greet"), 2000);
@@ -228,6 +229,7 @@
     if (!previewCanvas) return;
     drawPreview();
     capturedSrc = buildFramedCapture();
+    recentShots = [...recentShots, { src: capturedSrc, qr: null }].slice(-3);
 
     if (capturedExitTimer) clearTimeout(capturedExitTimer);
     // snap instantly back to the above-top-right origin (no transition) in case
@@ -294,6 +296,9 @@
     if (!res.ok) return;
     const { id } = await res.json();
     savedPhotoId = id;
+    const qr = await QRCode.toDataURL(`${location.origin}/photo?id=${id}`, { margin: 1, width: 400 });
+    const shot = recentShots.find((s) => s.src === image);
+    if (shot) shot.qr = qr;
   }
 </script>
 
@@ -392,6 +397,17 @@
     class:instant={capturedInstant}
   >
     <img src={capturedSrc} alt="Captured" />
+  </div>
+{/if}
+
+{#if recentShots.length}
+  <div class="recent" class:show={capturedPhase === "shown"} class:exiting={capturedPhase === "exiting"}>
+    {#each recentShots as shot}
+      <div class="shot">
+        <img src={shot.src} alt="Recent shot" />
+        {#if shot.qr}<img class="shot-qr" src={shot.qr} alt="Scan to get this photo" />{/if}
+      </div>
+    {/each}
   </div>
 {/if}
 
@@ -644,8 +660,8 @@
   }
   .qr {
     position: fixed;
-    bottom: 4vh;
-    left: 50%;
+    top: 50%;
+    right: 3vw;
     z-index: 60;
     padding: 16px;
     border-radius: 12px;
@@ -654,9 +670,49 @@
     text-align: center;
     font: 600 16px system-ui, -apple-system, sans-serif;
     color: #333;
-    transform: translate(calc(-50% + 100vw), 0);
+    transform: translate(calc(100% + 10vw), -50%);
     transition: transform 1s ease;
     pointer-events: none;
+  }
+  .recent {
+    position: fixed;
+    bottom: 7vh;
+    left: 50%;
+    z-index: 60;
+    display: flex;
+    gap: 2vw;
+    transform: translate(-50%, 200%);
+    transition: transform 1s ease;
+    pointer-events: none;
+  }
+  .recent img {
+    width: 18vw;
+    max-width: none;
+    max-height: none;
+    border-radius: 4px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+    transition: none;
+  }
+  .shot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1vh;
+  }
+  .recent .shot-qr {
+    width: 7vw;
+    padding: 0.6vw;
+    border-radius: 6px;
+    background: #fff;
+    box-shadow: none;
+  }
+  .recent.show {
+    transform: translate(-50%, 0);
+    transition-delay: 3s; /* wait for the polaroid to land */
+  }
+  .recent.exiting {
+    transform: translate(-50%, 200%);
+    transition-delay: 0s;
   }
   .qr img {
     display: block;
@@ -667,11 +723,11 @@
     transition: none;
   }
   .qr.show {
-    transform: translate(-50%, 0);
+    transform: translate(0, -50%);
     transition-delay: 3s; /* wait for the polaroid to land */
   }
   .qr.exiting {
-    transform: translate(calc(-50% + 100vw), 0);
+    transform: translate(calc(100% + 10vw), -50%);
     transition-delay: 0s;
   }
   .captured img {
