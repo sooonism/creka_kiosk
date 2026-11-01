@@ -14,17 +14,76 @@
   // IG ignores caption passed via share/URL, so copy it for the user to paste.
   async function shareToIG() {
     try { await navigator.clipboard.writeText(caption); copied = true; } catch { copied = false; }
-    // fetch during the 1s pause so the share sheet opens the moment it ends (keeps the tap's user activation fresh)
-    const [blob] = await Promise.all([
-      fetch(src!).then((r) => r.blob()),
-      new Promise((r) => setTimeout(r, 1000)),
-    ]);
-    const file = new File([blob], 'creka.png', { type: 'image/png' });
+    // build the file during the 1s pause so the share sheet opens the moment it ends (keeps the tap's user activation fresh)
+    const [file] = await Promise.all([photoFile(), new Promise((r) => setTimeout(r, 1000))]);
     if (navigator.canShare?.({ files: [file] })) {
       await navigator.share({ files: [file], text: caption }).catch(() => {});
     } else {
       location.href = 'instagram://camera'; // no file share support: just open IG
     }
+  }
+
+  // WhatsApp: attach the (doodled) image together with the link; no file share support: link-only wa.me
+  async function shareToWA() {
+    const text = `${caption}\n${location.href}`;
+    const file = await photoFile();
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], text }).catch(() => {});
+    } else {
+      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+    }
+  }
+
+  // doodle layer: a canvas over the photo at the photo's natural resolution
+  let img = $state<HTMLImageElement>();
+  let doodle = $state<HTMLCanvasElement>();
+  let color = $state('#dd257e');
+  let drawing = false;
+  let hinted = $state(false); // hide the hint after the first stroke
+
+  function sizeDoodle() {
+    doodle!.width = img!.naturalWidth;
+    doodle!.height = img!.naturalHeight;
+  }
+
+  function pos(e: PointerEvent) {
+    const r = doodle!.getBoundingClientRect();
+    return [((e.clientX - r.left) * doodle!.width) / r.width, ((e.clientY - r.top) * doodle!.height) / r.height];
+  }
+
+  function down(e: PointerEvent) {
+    drawing = true;
+    hinted = true;
+    doodle!.setPointerCapture(e.pointerId);
+    const ctx = doodle!.getContext('2d')!;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = doodle!.width / 100;
+    ctx.lineCap = ctx.lineJoin = 'round';
+    ctx.beginPath();
+    const [x, y] = pos(e);
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + 0.1, y); // a tap leaves a dot
+    ctx.stroke();
+  }
+
+  function move(e: PointerEvent) {
+    if (!drawing) return;
+    const ctx = doodle!.getContext('2d')!;
+    const [x, y] = pos(e);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  }
+
+  // photo + doodle flattened into one PNG
+  async function photoFile() {
+    const c = document.createElement('canvas');
+    c.width = doodle!.width;
+    c.height = doodle!.height;
+    const ctx = c.getContext('2d')!;
+    ctx.drawImage(img!, 0, 0);
+    ctx.drawImage(doodle!, 0, 0);
+    const blob = await new Promise<Blob>((res) => c.toBlob((b) => res(b!), 'image/png'));
+    return new File([blob], 'creka.png', { type: 'image/png' });
   }
 
   let sponsorShow = $state(false);
@@ -36,8 +95,10 @@
   });
 
   $effect(() => {
-    const id = new URLSearchParams(location.search).get('id');
-    src = id ? `/captures/demo/camwithnkob/${id}.png` : null;
+    const q = new URLSearchParams(location.search);
+    const id = q.get('id');
+    const kiosk = q.get('kiosk');
+    src = id ? `/captures/demo/camwithnkob/${kiosk ? kiosk + '/' : ''}${id}.png` : null;
     if (src) {
       visible = false;
       const t = setTimeout(() => (visible = true), 1000);
@@ -86,16 +147,23 @@
   {:else if notFound}
     <p>No photo found for that id.</p>
   {:else}
-    <img {src} alt="Captured" class:show={visible} onerror={() => (notFound = true)} />
+    <div class="photo" class:show={visible}>
+      <img bind:this={img} {src} alt="Captured" onload={sizeDoodle} onerror={() => (notFound = true)} />
+      <canvas
+        bind:this={doodle}
+        onpointerdown={down}
+        onpointermove={move}
+        onpointerup={() => (drawing = false)}
+        onpointercancel={() => (drawing = false)}
+      ></canvas>
+      {#if !hinted}<span class="hint">✏️ Doodle on me!</span>{/if}
+    </div>
     {#if visible}
-      <a
-        class="share"
-        href={`https://wa.me/?text=${encodeURIComponent(`${caption}\n${location.href}`)}`}
-        target="_blank"
-        rel="noopener"
-      >
-        Share via WhatsApp
-      </a>
+      <div class="tools">
+        <input type="color" bind:value={color} aria-label="Doodle color" />
+        <button class="share clear" onclick={sizeDoodle}>Clear</button>
+      </div>
+      <button class="share" onclick={shareToWA}>Share via WhatsApp</button>
       <button class="share ig" onclick={shareToIG}>Share to Instagram</button>
       {#if copied !== null}
         <p class="caption-note">{copied ? 'Caption copied. Paste it in Instagram:' : 'Copy this caption:'} {caption}</p>
@@ -117,15 +185,47 @@
     font-family: system-ui, -apple-system, sans-serif;
     overflow: hidden;
   }
-  img {
-    max-width: 90vw;
-    max-height: 90vh;
-    display: block;
+  .photo {
+    position: relative;
     transform: translateY(-150vh);
     transition: transform 5s ease;
   }
-  img.show {
+  .photo.show {
     transform: translateY(0);
+  }
+  .photo img {
+    max-width: 90vw;
+    max-height: 80vh;
+    display: block;
+  }
+  .photo canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    touch-action: none; /* draw instead of scroll */
+    cursor: crosshair;
+  }
+.hint {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: rgba(15, 17, 23, 0.75);
+    color: #fff;
+    font: 600 13px system-ui, -apple-system, sans-serif;
+    pointer-events: none; /* let strokes through */
+  }
+  .tools {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .clear {
+    border: 0;
+    cursor: pointer;
+    background: #666;
   }
   .sponsor {
     position: fixed;
@@ -220,7 +320,8 @@
     transform: translateX(-50%); /* not the photo's slide-in */
     transition: none;
   }
-  .ig {
+  .ig,
+  button.share {
     border: 0;
     cursor: pointer;
   }
