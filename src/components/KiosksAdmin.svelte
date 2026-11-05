@@ -73,6 +73,14 @@
     if (r.ok) await load(true);
   }
 
+  async function removeShot(k: K, id: string) {
+    if (!confirm("Delete this photo? (the copy in creka_backend stays)")) return;
+    const r = await fetch(`/api/captures?kiosk=${k.id}&id=${id}`, { method: "DELETE" });
+    if (!r.ok) return void (msg = "error: could not delete photo");
+    thumbs[k.id] = thumbs[k.id].filter((x) => x !== id);
+    k.captures = Math.max(0, (k.captures ?? 1) - 1);
+  }
+
   const toggle = (k: K, f: string) => (k.hw.flags = k.hw.flags.includes(f) ? k.hw.flags.filter((x) => x !== f) : [...k.hw.flags, f]);
   const can = (k: K) => MODULES.filter((m) => m.needs.every((n) => k.hw.flags.includes(n)));
   const cannot = (k: K) =>
@@ -191,7 +199,12 @@
         <h3>Captures <small>{k.captures ?? 0} files</small></h3>
         <code>{dir(k)}</code>
         <div class="thumbs">
-          {#each thumbs[k.id] ?? [] as id}<a href={`${dir(k)}${id}.png`} target="_blank"><img src={`${dir(k)}${id}.png`} alt="" /></a>{/each}
+          {#each thumbs[k.id] ?? [] as id (id)}
+            <span class="thumb">
+              <a href={`${dir(k)}${id}.png`} target="_blank"><img src={`${dir(k)}${id}.png`} alt="" /></a>
+              <button class="x" aria-label="Delete photo" onclick={() => removeShot(k, id)}>×</button>
+            </span>
+          {/each}
         </div>
         <label>Notes<textarea bind:value={k.notes}></textarea></label>
       </div>
@@ -255,6 +268,9 @@
   h3 { margin: 0.5rem 0 0.25rem; font-size: 0.85rem; }
   .thumbs { display: flex; flex-wrap: wrap; gap: 4px; margin: 0.5rem 0; }
   .thumbs img { width: 64px; height: 64px; object-fit: cover; border-radius: 4px; }
+  .thumb { position: relative; }
+  .thumb .x { position: absolute; top: 2px; right: 2px; width: 22px; height: 22px; padding: 0; line-height: 1; border-radius: 50%; background: rgba(0, 0, 0, 0.7); }
+  .thumb .x:hover { border-color: #f87171; color: #f87171; }
   textarea { min-height: 3rem; }
   footer { margin-top: 1rem; display: flex; gap: 0.5rem; align-items: center; }
 </style>

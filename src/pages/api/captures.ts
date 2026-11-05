@@ -1,9 +1,9 @@
 export const prerender = false;
 
 import type { APIRoute } from 'astro';
-import { stat } from 'node:fs/promises';
+import { stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
-import { capturesDir, listPngs, validId } from '../../lib/kiosks';
+import { ADMIN_COOKIE, capturesDir, listPngs, readKiosks, validId } from '../../lib/kiosks';
 
 // ids of saved captures, newest first; ?kiosk=<id> reads that kiosk's folder
 export const GET: APIRoute = async ({ url }) => {
@@ -15,4 +15,15 @@ export const GET: APIRoute = async ({ url }) => {
   );
   const ids = withTime.sort((a, b) => b.t - a.t).map((f) => f.id);
   return new Response(JSON.stringify(ids), { headers: { 'Content-Type': 'application/json' } });
+};
+
+// dashboard "×": delete one capture of a kiosk (admin only). Only this server's copy; creka_backend keeps its own.
+export const DELETE: APIRoute = async ({ url, cookies }) => {
+  const kiosk = url.searchParams.get('kiosk');
+  const id = url.searchParams.get('id') ?? '';
+  if (!validId(kiosk) || !/^(\d{4}-\d{2}-\d{2}\/)?[\w-]+$/.test(id)) return new Response('bad request', { status: 400 });
+  const { status } = await readKiosks(cookies.get(ADMIN_COOKIE)?.value ?? '');
+  if (status !== 200) return new Response('admin login required', { status });
+  await unlink(path.join(capturesDir(kiosk), `${id}.png`)).catch(() => {});
+  return new Response('ok');
 };
