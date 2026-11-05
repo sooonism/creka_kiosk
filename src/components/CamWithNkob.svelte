@@ -836,7 +836,8 @@
   }
   .idle-shots.top {
     bottom: auto;
-    top: calc(6vh + 18vw); /* one polaroid height down, clear of the frame at the top */
+    /* frame.png is 2160x4200 with a 473px solid top border, drawn cover + top-aligned: start below that border, and at least one polaroid down */
+    top: max(calc(6vh + 18vw), calc(473 * max(100vw / 2160, 100vh / 4200) + 1.5vh));
   }
   .idle-shots.show {
     opacity: 1;
