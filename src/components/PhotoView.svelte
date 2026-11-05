@@ -8,7 +8,8 @@
   let notFound = $state(false);
   let visible = $state(false);
 
-  const caption = `${sponsor ? `Presented by ${sponsor}. ` : ''}My cartoon selfie from Creka Kiosk #creka`;
+  const waCaption = `${sponsor ? `Presented by ${sponsor}. ` : ''}Group photo with dururu of @nkob.official, by @creka_community.`;
+  const igCaption = `${waCaption}\n#NKOB #A4ArtFair #GMBB #NokiiStudio #Dururu #creka_kiosk`; // WhatsApp gets the same line without the hashtags
 
   let copied = $state<boolean | null>(null);
 
@@ -23,11 +24,11 @@
   // IG ignores caption passed via share/URL, so copy it for the user to paste.
   async function shareToIG() {
     track('instagram');
-    try { await navigator.clipboard.writeText(caption); copied = true; } catch { copied = false; }
+    try { await navigator.clipboard.writeText(igCaption); copied = true; } catch { copied = false; }
     // build the file during the 1s pause so the share sheet opens the moment it ends (keeps the tap's user activation fresh)
     const [file] = await Promise.all([photoFile(), new Promise((r) => setTimeout(r, 1000))]);
     if (navigator.canShare?.({ files: [file] })) {
-      await navigator.share({ files: [file], text: caption }).catch(() => {});
+      await navigator.share({ files: [file], text: igCaption }).catch(() => {});
     } else {
       location.href = 'instagram://camera'; // no file share support: just open IG
     }
@@ -36,7 +37,7 @@
   // WhatsApp: attach the (doodled) image together with the link; no file share support: link-only wa.me
   async function shareToWA() {
     track('whatsapp');
-    const text = `${caption}\n${location.href}`;
+    const text = `${waCaption}\n${location.href}`;
     const file = await photoFile();
     if (navigator.canShare?.({ files: [file] })) {
       await navigator.share({ files: [file], text }).catch(() => {});
@@ -178,7 +179,7 @@
       <button class="share" onclick={shareToWA}>Share via WhatsApp</button>
       <button class="share ig" onclick={shareToIG}>Share to Instagram</button>
       {#if copied !== null}
-        <p class="caption-note">{copied ? 'Caption copied. Paste it in Instagram:' : 'Copy this caption:'} {caption}</p>
+        <p class="caption-note">{copied ? 'Caption copied. Paste it in Instagram:' : 'Copy this caption:'} {igCaption}</p>
       {/if}
     {/if}
   {/if}
@@ -265,6 +266,7 @@
     opacity: 1;
   }
   .caption-note {
+    white-space: pre-line; /* keep the line break before the hashtags */
     position: fixed;
     top: 16px;
     left: 50%;
