@@ -836,7 +836,7 @@
   }
   .idle-shots.top {
     bottom: auto;
-    top: 6vh;
+    top: calc(6vh + 18vw); /* one polaroid height down, clear of the frame at the top */
   }
   .idle-shots.show {
     opacity: 1;
