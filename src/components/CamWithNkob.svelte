@@ -31,7 +31,7 @@
   let faceW = $state(0.3); // latest face box width as a fraction of the frame
   // two zones; between 0.25 and 0.3 the zone you were in holds, so hovering at the cutoff doesn't flip it
   let distance = $state<"near" | "far">("near");
-  const SCALE_RANGE = { far: [1.5, 2.5], near: [3.5, 4.5] };
+  const SCALE_RANGE = { far: [1, 1.5], near: [2.5, 3.5] };
   const rerollPose = () => {
     // pick a scale range by how close the user is (face box width / frame width)
     const [lo, hi] = SCALE_RANGE[distance];
