@@ -4,7 +4,7 @@
 
   type Hw = { board: string; cpu: string; ram: string; monitor: string; camera: string; os: string; flags: string[] };
   type H = { day: string; samples: number; last_at: string; max_temp: number | null; min_disk_pct: number | null; min_mem_pct: number | null; min_wifi_pct: number | null; bad_camera: number; bad_display: number; bad_browser: number; last: Record<string, any> };
-  type K = { events?: Record<string, number>; health?: H | null; id: string; name: string; location: string; module: string; hw: Hw; notes: string; lastSeen: number; fresh?: boolean; captures?: number; beat?: { t: number; page: string; w: number; h: number } };
+  type K = { mode: "actual" | "debug"; events?: Record<string, number>; health?: H | null; id: string; name: string; location: string; module: string; hw: Hw; notes: string; lastSeen: number; fresh?: boolean; captures?: number; beat?: { t: number; page: string; w: number; h: number } };
 
   let kiosks = $state<K[]>([]);
   let thumbs = $state<Record<string, string[]>>({});
@@ -18,7 +18,7 @@
   let storage = $state({ used: 0, limit: 1 });
 
   const blank = (): K => ({
-    id: "", name: "", location: "", module: MODULES[0].route, notes: "", lastSeen: 0, fresh: true,
+    id: "", name: "", location: "", module: MODULES[0].route, mode: "actual", notes: "", lastSeen: 0, fresh: true,
     hw: { board: "", cpu: "", ram: "", monitor: "", camera: "", os: "", flags: ["internet"] },
   });
 
@@ -133,7 +133,7 @@
 </div>
 <p class="live"><span class="dot on"></span> <b>{onlineCount}</b> of {kiosks.length} kiosk{kiosks.length === 1 ? "" : "s"} online</p>
 <p class="hint">
-  Point each Pi's Chromium at <code>https://kiosk.creka.online/k/&lt;id&gt;</code> once; change its module here.
+  Point each Pi's Chromium at <code>https://kiosk.creka.online/k/&lt;id&gt;</code> once; change its module and mode here, then press Reload page on the card.
   <button onclick={() => kiosks.push(blank())}>+ Add kiosk</button>
   <button onclick={logout}>Log out</button>
   <span class="msg">{msg}</span>
@@ -146,7 +146,7 @@
       <b>{k.name || k.id || "new kiosk"}</b>
       <small>{k.id}{k.location ? ` · ${k.location}` : ""}</small>
       {#if k.health}<small class:down={!piUp(k)}>Pi {piUp(k) ? `${lastOf(k).temp ?? "?"}°C · disk ${lastOf(k).disk_pct ?? "?"}% free · wifi ${lastOf(k).wifi_pct ?? "?"}%` : "no report"}</small>{/if}
-      <small class="mod">{MODULES.find((m) => m.route === k.module)?.label ?? k.module}</small>
+      <small class="mod">{MODULES.find((m) => m.route === k.module)?.label ?? k.module}{k.mode === "debug" ? " · debug" : ""}</small>
     </summary>
     <header>
       <input class="id" placeholder="id (a-z0-9-)" bind:value={k.id} />
@@ -155,6 +155,12 @@
       <label>Module
         <select bind:value={k.module}>
           {#each MODULES as m}<option value={m.route}>{m.label} — {m.route}</option>{/each}
+        </select>
+      </label>
+      <label>Mode
+        <select bind:value={k.mode}>
+          <option value="actual">actual (real kiosk)</option>
+          <option value="debug">debug (debug panel)</option>
         </select>
       </label>
     </header>

@@ -7,5 +7,6 @@ const res = validId(Astro.params.id) ? await backend(`/kiosks/${Astro.params.id}
 if (!res?.ok) return new Response('Unknown kiosk', { status: res ? 404 : 502 });
 const kiosk = await res.json();
 await touchKiosk(kiosk.id);
-return Astro.redirect(`${kiosk.module}?kiosk=${kiosk.id}&mode=actual`);
+// actual = the real kiosk flow (?mode=actual); debug = no mode param, which shows the debug panel
+return Astro.redirect(`${kiosk.module}?kiosk=${kiosk.id}${kiosk.mode === 'debug' ? '' : '&mode=actual'}`);
 ---

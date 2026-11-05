@@ -6,6 +6,7 @@ export interface Kiosk {
   name: string;
   location: string;
   module: string;
+  mode: 'actual' | 'debug'; // actual = real kiosk flow, debug = debug panel
   hw: { board: string; cpu: string; ram: string; monitor: string; camera: string; os: string; flags: string[] };
   notes: string;
   lastSeen: number;
@@ -34,7 +35,7 @@ export const backend = (route: string, init: RequestInit = {}, token = '') =>
   });
 
 const toKiosk = (k: any): Kiosk => ({
-  id: k.id, name: k.name, location: k.location, module: k.module, notes: k.notes,
+  id: k.id, name: k.name, location: k.location, module: k.module, mode: k.mode === 'debug' ? 'debug' : 'actual', notes: k.notes,
   hw: { board: '', cpu: '', ram: '', monitor: '', camera: '', os: '', flags: [], ...k.hw },
   lastSeen: k.last_seen ? Date.parse(k.last_seen) : 0,
   captures: k.captures,

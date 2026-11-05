@@ -19,8 +19,8 @@ const forward = async (res: Response) => json(await res.json().catch(() => ({}))
 export const POST: APIRoute = async ({ request, cookies }) => {
   const k: Kiosk = await request.json();
   if (!validId(k.id)) return json({ error: 'id must be a-z, 0-9, - (max 40)' }, 400);
-  const { id, name, location, module, hw, notes } = k;
-  return forward(await backend(`/kiosks/${id}`, { method: 'PUT', body: JSON.stringify({ name, location, module, hw, notes }) }, cookies.get(ADMIN_COOKIE)?.value));
+  const { id, name, location, module, mode, hw, notes } = k;
+  return forward(await backend(`/kiosks/${id}`, { method: 'PUT', body: JSON.stringify({ name, location, module, mode, hw, notes }) }, cookies.get(ADMIN_COOKIE)?.value));
 };
 
 export const DELETE: APIRoute = async ({ cookies, url }) => {

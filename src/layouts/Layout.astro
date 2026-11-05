@@ -40,7 +40,7 @@
             const c = r.status === 200 ? await r.json() : null;
             if (c) {
               await fetch("/api/kiosk-cmd", { method: "POST", body: JSON.stringify({ n: c.n, ...answer(c) }) }).catch(() => {});
-              if (c.type === "reload") return location.reload(); // after the reply is in, so the dashboard hears back
+              if (c.type === "reload") return (location.href = `/k/${kid}`); // after the reply is in; via /k/ so a new module or mode applies
             }
             setTimeout(listen, 0);
           } catch {
