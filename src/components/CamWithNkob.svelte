@@ -164,7 +164,7 @@
   $effect(() => {
     localStorage.setItem("nkob-countdown-y", String(countdownY));
   });
-  // idle: fade past polaroids in and out, 3 random ones at a time, each tilted a bit
+  // idle: fade past polaroids in and out, 3 random ones at the bottom and 3 more along the top, each tilted a bit
   let idleShots = $state<{ src: string; r: number }[]>([]);
   let idleShow = $state(false);
   $effect(() => {
@@ -177,7 +177,7 @@
       while (alive && ids.length) {
         idleShots = [...ids]
           .sort(() => Math.random() - 0.5)
-          .slice(0, 3)
+          .slice(0, 6)
           .map((id) => ({ src: `/captures/demo/camwithnkob/${kioskDir}${id}.png`, r: rand(-8, 8) }));
         await wait(100); // let the new images mount at opacity 0 so the fade-in runs
         idleShow = true;
@@ -451,7 +451,12 @@
 </div>
 
 <div class="idle-shots" class:show={idleShow}>
-  {#each idleShots as shot}
+  {#each idleShots.slice(0, 3) as shot}
+    <img src={shot.src} alt="Past shot" style:transform="rotate({shot.r}deg)" />
+  {/each}
+</div>
+<div class="idle-shots top" class:show={idleShow}>
+  {#each idleShots.slice(3) as shot}
     <img src={shot.src} alt="Past shot" style:transform="rotate({shot.r}deg)" />
   {/each}
 </div>
@@ -828,6 +833,10 @@
     opacity: 0;
     transition: opacity 1s ease;
     pointer-events: none;
+  }
+  .idle-shots.top {
+    bottom: auto;
+    top: 6vh;
   }
   .idle-shots.show {
     opacity: 1;
