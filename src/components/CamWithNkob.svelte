@@ -329,6 +329,7 @@
     if (!previewCanvas) return;
     drawPreview();
     capturedSrc = buildFramedCapture();
+    caption = pickCaption(caption);
     recentShots = [...recentShots, { src: capturedSrc, qr: null }].slice(-3);
 
     if (capturedExitTimer) clearTimeout(capturedExitTimer);
@@ -351,7 +352,23 @@
     saveCapture(capturedSrc);
   }
 
-  // Bakes the white polaroid border + "Hello World" caption into a fixed
+  const CAPTIONS = [
+    "Stay weird. Stay wonderful.",
+    "Be yourself. That’s your superpower.",
+    "Small moments, big smiles.",
+    "Don’t forget to enjoy the little things.",
+    "You are someone’s favourite human.",
+    "Today? Just chill.",
+    "Too cool to be serious.",
+    "I’m here for the good vibes.",
+    "Low battery, high happiness.",
+    "Life is weird. Let’s enjoy it.",
+  ];
+  // the preview shows the caption the next photo will get; re-rolled after every shot
+  const pickCaption = (prev = "") => CAPTIONS.filter((c) => c !== prev)[Math.floor(Math.random() * (CAPTIONS.length - 1))];
+  let caption = $state(pickCaption());
+
+  // Bakes the white polaroid border + caption into a fixed
   // 1080x1080 PNG; the feed is cover-cropped into the photo window.
   function buildFramedCapture(): string {
     const w = 1080;
@@ -381,7 +398,10 @@
     ctx.font = "600 56px system-ui, -apple-system, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText("Hello World", w / 2, h - bottom / 2);
+    // shrink long captions to fit inside the border
+    const size = Math.min(56, (56 * pw) / ctx.measureText(caption).width);
+    ctx.font = `600 ${size}px system-ui, -apple-system, sans-serif`;
+    ctx.fillText(caption, w / 2, h - bottom / 2);
 
     return out.toDataURL("image/png");
   }
@@ -497,7 +517,7 @@
 
 <div class="preview-frame">
   <canvas bind:this={previewCanvas} class="preview"></canvas>
-  <div class="preview-caption">Hello World</div>
+  <div class="preview-caption">{caption}</div>
 </div>
 
 {#if capturedSrc}
@@ -739,6 +759,8 @@
     justify-content: center;
     font: 600 16px system-ui, -apple-system, sans-serif;
     color: #333;
+    text-align: center;
+    padding: 0 12px;
   }
   .flash {
     position: fixed;

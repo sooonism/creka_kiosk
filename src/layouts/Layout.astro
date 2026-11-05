@@ -17,6 +17,33 @@
         const beat = () => fetch(`/api/heartbeat?kiosk=${kid}`, { method: "POST", body: JSON.stringify({ page: location.pathname, w: innerWidth, h: innerHeight }) }).catch(() => {});
         beat();
         setInterval(beat, 20000);
+
+        // dashboard commands arrive over one long-poll: ping, or a small frame of the page's canvas to check the camera
+        const answer = (c) => {
+          if (c.type === "ping") return { ok: true, page: location.pathname, w: innerWidth, h: innerHeight, up: Math.round(performance.now() / 1000) };
+          const cv = document.querySelector("canvas");
+          if (!cv || !cv.width) return { ok: false, error: "no camera canvas on this page" };
+          const s = document.createElement("canvas");
+          s.width = 480;
+          s.height = Math.round((cv.height * 480) / cv.width);
+          const g = s.getContext("2d");
+          g.drawImage(cv, 0, 0, s.width, s.height);
+          const px = g.getImageData(0, 0, s.width, s.height).data;
+          let sum = 0;
+          for (let i = 0; i < px.length; i += 16) sum += px[i] + px[i + 1] + px[i + 2];
+          return { ok: true, img: s.toDataURL("image/jpeg", 0.6), bright: Math.round(sum / (px.length / 16) / 3) };
+        };
+        const listen = async () => {
+          try {
+            const r = await fetch(`/api/kiosk-cmd?kiosk=${kid}`);
+            const c = r.status === 200 ? await r.json() : null;
+            if (c) fetch("/api/kiosk-cmd", { method: "POST", body: JSON.stringify({ n: c.n, ...answer(c) }) }).catch(() => {});
+            setTimeout(listen, 0);
+          } catch {
+            setTimeout(listen, 5000);
+          }
+        };
+        listen();
       }
     </script>
 	</body>

@@ -85,7 +85,16 @@
   const tone = (s?: number) => (s === undefined ? "" : s >= 1000 ? "ok" : s >= 300 ? "mid" : "bad");
   const tip = (d: { day: string; h?: H }) =>
     d.h ? `${d.day}: ${d.h.samples} reports, max ${d.h.max_temp ?? "?"}°C, min disk free ${d.h.min_disk_pct ?? "?"}%, min wifi ${d.h.min_wifi_pct ?? "?"}%, camera/display/browser misses ${d.h.bad_camera}/${d.h.bad_display}/${d.h.bad_browser}` : `${d.day}: no reports`;
-  const online = (k: K) => now - (k.beat?.t ?? 0) < 60_000;
+  // online = the kiosk page beat in the last minute, or the Pi's health report is fresh
+  const online = (k: K) => now - (k.beat?.t ?? 0) < 60_000 || piUp(k);
+  const onlineCount = $derived(kiosks.filter(online).length);
+  type R = { busy?: boolean; ok?: boolean; error?: string; ms?: number; img?: string; bright?: number; page?: string; up?: number };
+  let result = $state<Record<string, R>>({});
+  const run = async (k: K, type: "ping" | "snap") => {
+    result[k.id] = { busy: true };
+    const r = await fetch("/api/kiosk-do", { method: "POST", headers: headers(), body: JSON.stringify({ id: k.id, type }) });
+    result[k.id] = r.ok ? await r.json() : { ok: false, error: `dashboard says ${r.status}` };
+  };
   const full = $derived(storage.used >= storage.limit);
   const mb = (b: number) => (b / 1048576).toFixed(0);
   const dir = (k: K) => `/captures/demo/camwithnkob/${k.id}/`;
@@ -111,6 +120,7 @@
   {#if full}— <b>FULL, delete old captures</b>{/if}
   <progress value={storage.used} max={storage.limit}></progress>
 </div>
+<p class="live"><span class="dot on"></span> <b>{onlineCount}</b> of {kiosks.length} kiosk{kiosks.length === 1 ? "" : "s"} online</p>
 <p class="hint">
   Point each Pi's Chromium at <code>https://kiosk.creka.online/k/&lt;id&gt;</code> once; change its module here.
   <button onclick={() => kiosks.push(blank())}>+ Add kiosk</button>
@@ -187,9 +197,21 @@
     <footer>
       <button onclick={() => save(k)}>Save</button>
       <button class="del" onclick={() => remove(k)}>Delete</button>
+      <button onclick={() => run(k, "ping")} disabled={result[k.id]?.busy}>Ping</button>
+      <button onclick={() => run(k, "snap")} disabled={result[k.id]?.busy}>Check camera</button>
       {#if k.beat}<small>on {k.beat.page} ({k.beat.w}×{k.beat.h})</small>{/if}
       {#if k.lastSeen}<small>last seen {new Date(k.lastSeen).toLocaleString()}</small>{/if}
     </footer>
+    {#if result[k.id]}
+      {@const r = result[k.id]}
+      <p class="reply" class:bad={r.ok === false}>
+        {#if r.busy}waiting for the kiosk…
+        {:else if !r.ok}✗ {r.error}
+        {:else if r.img}
+          {r.bright! < 8 ? "✗ frame is black, camera not delivering" : "✓ camera frame"} (brightness {r.bright}/255, {r.ms} ms)<br /><img src={r.img} alt="camera check" />
+        {:else}✓ replied in {r.ms} ms · {r.page} · page up {r.up}s{/if}
+      </p>
+    {/if}
   </details>
 {/each}
 {/if}
@@ -213,7 +235,10 @@
   .mod { margin-left: auto; }
   details[open] > summary { margin-bottom: 0.75rem; }
   .dot { width: 10px; height: 10px; border-radius: 50%; background: #5b5f73; align-self: center; }
-  .dot.on { background: #4ade80; }
+  .dot.on { background: #4ade80; animation: blink 1.4s ease-in-out infinite; }
+  @keyframes blink { 50% { opacity: 0.25; } }
+  .live { font-size: 0.95rem; display: flex; align-items: center; gap: 0.4rem; }
+  .reply { font-size: 0.85rem; color: #4ade80; } .reply.bad { color: #f87171; } .reply img { max-width: 24rem; width: 100%; border-radius: 6px; margin-top: 0.4rem; }
   .down { color: #f87171; }
   .chk { list-style: none; padding: 0; } .chk .bad { color: #f87171; }
   .strip { display: flex; gap: 3px; margin-top: 0.5rem; }
