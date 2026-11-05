@@ -1,7 +1,7 @@
-// dashboard → kiosk commands (ping, camera snap). Kiosks sit behind CGNAT, so each kiosk page keeps one
+// dashboard → kiosk commands (ping, camera snap, page reload). Kiosks sit behind CGNAT, so each kiosk page keeps one
 // long-poll open (GET /api/kiosk-cmd), gets the command through it and POSTs the reply back.
 // In memory, single node process, like `beats`; a lost poll just means a "no reply" the admin can retry.
-export type Cmd = { n: number; type: 'ping' | 'snap' };
+export type Cmd = { n: number; type: 'ping' | 'snap' | 'reload' };
 
 const polls = new Map<string, (c: Cmd | null) => void>(); // the kiosk's open long-poll
 const queue = new Map<string, Cmd>(); // command that arrived while no poll was open

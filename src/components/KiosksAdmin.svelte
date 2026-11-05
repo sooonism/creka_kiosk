@@ -101,7 +101,7 @@
   const onlineCount = $derived(kiosks.filter(online).length);
   type R = { busy?: boolean; ok?: boolean; error?: string; ms?: number; img?: string; bright?: number; page?: string; up?: number };
   let result = $state<Record<string, R>>({});
-  const run = async (k: K, type: "ping" | "snap") => {
+  const run = async (k: K, type: "ping" | "snap" | "reload") => {
     result[k.id] = { busy: true };
     const r = await fetch("/api/kiosk-do", { method: "POST", headers: headers(), body: JSON.stringify({ id: k.id, type }) });
     result[k.id] = r.ok ? await r.json() : { ok: false, error: `dashboard says ${r.status}` };
@@ -216,6 +216,7 @@
       <button class="del" onclick={() => remove(k)}>Delete</button>
       <button onclick={() => run(k, "ping")} disabled={result[k.id]?.busy}>Ping</button>
       <button onclick={() => run(k, "snap")} disabled={result[k.id]?.busy}>Check camera</button>
+      <button onclick={() => run(k, "reload")} disabled={result[k.id]?.busy}>Reload page</button>
       {#if k.beat}<small>on {k.beat.page} ({k.beat.w}×{k.beat.h})</small>{/if}
       {#if k.lastSeen}<small>last seen {new Date(k.lastSeen).toLocaleString()}</small>{/if}
     </footer>
@@ -226,6 +227,7 @@
         {:else if !r.ok}✗ {r.error}
         {:else if r.img}
           {r.bright! < 8 ? "✗ frame is black, camera not delivering" : "✓ camera frame"} (brightness {r.bright}/255, {r.ms} ms)<br /><img src={r.img} alt="camera check" />
+        {:else if r.up === undefined}✓ reloading the kiosk page ({r.ms} ms)
         {:else}✓ replied in {r.ms} ms · {r.page} · page up {r.up}s{/if}
       </p>
     {/if}
