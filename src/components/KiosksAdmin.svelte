@@ -4,7 +4,7 @@
 
   type Hw = { board: string; cpu: string; ram: string; monitor: string; camera: string; os: string; flags: string[] };
   type H = { day: string; samples: number; last_at: string; max_temp: number | null; min_disk_pct: number | null; min_mem_pct: number | null; min_wifi_pct: number | null; bad_camera: number; bad_display: number; bad_browser: number; last: Record<string, any> };
-  type K = { health?: H | null; id: string; name: string; location: string; module: string; hw: Hw; notes: string; lastSeen: number; fresh?: boolean; captures?: number; beat?: { t: number; page: string; w: number; h: number } };
+  type K = { events?: Record<string, number>; health?: H | null; id: string; name: string; location: string; module: string; hw: Hw; notes: string; lastSeen: number; fresh?: boolean; captures?: number; beat?: { t: number; page: string; w: number; h: number } };
 
   let kiosks = $state<K[]>([]);
   let thumbs = $state<Record<string, string[]>>({});
@@ -32,7 +32,7 @@
     else {
       for (const s of server) {
         const mine = kiosks.find((k) => k.id === s.id);
-        if (mine) Object.assign(mine, { beat: s.beat, captures: s.captures, lastSeen: s.lastSeen, health: s.health });
+        if (mine) Object.assign(mine, { beat: s.beat, captures: s.captures, lastSeen: s.lastSeen, health: s.health, events: s.events });
         else kiosks.push(s);
       }
       kiosks = kiosks.filter((k) => k.fresh || server.some((s) => s.id === k.id)); // unsaved drafts survive the poll
@@ -197,6 +197,7 @@
 
       <div>
         <h3>Captures <small>{k.captures ?? 0} files</small></h3>
+        <small>Visitors: {k.events?.open ?? 0} opened the photo · {k.events?.whatsapp ?? 0} tapped WhatsApp · {k.events?.instagram ?? 0} tapped Instagram</small>
         <code>{dir(k)}</code>
         <div class="thumbs">
           {#each thumbs[k.id] ?? [] as id (id)}

@@ -71,7 +71,7 @@
 
   $effect(() => {
     if (!savedPhotoId) return;
-    QRCode.toDataURL(`${location.origin}/photo?id=${savedPhotoId}`, { margin: 1, width: 400 }).then(
+    QRCode.toDataURL(`${location.origin}/photo?id=${savedPhotoId}${kioskQuery}`, { margin: 1, width: 400 }).then(
       (url) => (qrSrc = url)
     );
   });

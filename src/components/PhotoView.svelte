@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   let { sponsor = null, donate = false }: { sponsor?: string | null; donate?: boolean } = $props(); // sponsor: brand overlay while the photo slides in; donate: dummy donate popup once it lands
   let donateOpen = $state(true);
   let thanksOpen = $state(false);
@@ -11,8 +12,17 @@
 
   let copied = $state<boolean | null>(null);
 
+  // count what the visitor does, per kiosk (the QR carries ?kiosk=<id>); a tap, not proof the share was sent
+  function track(type: 'open' | 'whatsapp' | 'instagram') {
+    const q = new URLSearchParams(location.search);
+    const kiosk = q.get('kiosk');
+    if (kiosk) fetch(`/api/event?kiosk=${kiosk}`, { method: 'POST', body: JSON.stringify({ type, photo: q.get('id') }), keepalive: true }).catch(() => {});
+  }
+  onMount(() => track('open'));
+
   // IG ignores caption passed via share/URL, so copy it for the user to paste.
   async function shareToIG() {
+    track('instagram');
     try { await navigator.clipboard.writeText(caption); copied = true; } catch { copied = false; }
     // build the file during the 1s pause so the share sheet opens the moment it ends (keeps the tap's user activation fresh)
     const [file] = await Promise.all([photoFile(), new Promise((r) => setTimeout(r, 1000))]);
@@ -25,6 +35,7 @@
 
   // WhatsApp: attach the (doodled) image together with the link; no file share support: link-only wa.me
   async function shareToWA() {
+    track('whatsapp');
     const text = `${caption}\n${location.href}`;
     const file = await photoFile();
     if (navigator.canShare?.({ files: [file] })) {

@@ -11,6 +11,7 @@ export interface Kiosk {
   lastSeen: number;
   captures?: number;
   health?: Record<string, any> | null; // latest daily Pi health row from creka_backend
+  events?: Record<string, number>; // photo-page taps so far: open / whatsapp / instagram
 }
 
 // prod sets CAPTURES_DIR to a folder the node server also serves statically (dist/client/captures/...)
@@ -38,6 +39,7 @@ const toKiosk = (k: any): Kiosk => ({
   lastSeen: k.last_seen ? Date.parse(k.last_seen) : 0,
   captures: k.captures,
   health: k.health,
+  events: k.events,
 });
 
 // null = backend said no (401/403 → not an admin session) or is unreachable
