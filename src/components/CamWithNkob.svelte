@@ -25,17 +25,13 @@
   );
   // pose is for the face-on-left case (nkob on the right); mirrored when the face is on the right
   type Pose = { x: number; y: number; r: number; s: number };
-  let pose = $state<Pose>({ x: 100, y: 40, r: -15, s: 4 });
+  let pose = $state<Pose>({ x: 100, y: 40, r: -15, s: 2.5 });
   let savedPoses = $state<Pose[]>([]);
   const rand = (min: number, max: number) => Math.round(min + Math.random() * (max - min));
   let faceW = $state(0.3); // latest face box width as a fraction of the frame
-  // two zones; between 0.25 and 0.3 the zone you were in holds, so hovering at the cutoff doesn't flip it
-  let distance = $state<"near" | "far">("near");
-  const SCALE_RANGE = { far: [1, 1.5], near: [2.5, 3.5] };
+  const NKOB_SCALE = 2.5; // fixed size, no near/far zones
   const rerollPose = () => {
-    // pick a scale range by how close the user is (face box width / frame width)
-    const [lo, hi] = SCALE_RANGE[distance];
-    pose.s = rand(lo * 10, hi * 10) / 10;
+    pose.s = NKOB_SCALE;
     pose.r = -rand(15, 45); // negative keeps the original tilt direction
     pose.y = 40;
   };
@@ -43,18 +39,7 @@
     poseIdx = (poseIdx + rand(1, NKOB_POSES.length - 1)) % NKOB_POSES.length; // random, never the same pose twice in a row
     rerollPose();
   };
-  let lastZoneChange = 0;
-  function onFaceSize(w: number) {
-    const before = distance;
-    faceW = w;
-    if (w >= 0.3) distance = "near";
-    else if (w < 0.25) distance = "far";
-    // near/far change = new pose + scale; cooldown stops jitter at a cutoff from spamming it
-    if (distance !== before && performance.now() - lastZoneChange > 1000) {
-      lastZoneChange = performance.now();
-      nextPose();
-    }
-  }
+  const onFaceSize = (w: number) => (faceW = w);
   let side = $derived(faceOnRight ? -1 : 1);
   let translateX = $derived(side * (nkobIn ? pose.x : 500));
   let rotate = $derived(side * pose.r);
@@ -168,7 +153,7 @@
   // push the UI state whenever it changes (JSON compare keeps the per-frame face size from flooding the socket)
   let lastState = "";
   $effect(() => {
-    const snapshot = JSON.stringify({ mode, stage, sidebarOpen, pose, savedPoses, countdownY, faceDetected, faceW: Math.round(faceW * 100) / 100, distance });
+    const snapshot = JSON.stringify({ mode, stage, sidebarOpen, pose, savedPoses, countdownY, faceDetected, faceW: Math.round(faceW * 100) / 100 });
     if (snapshot === lastState) return;
     lastState = snapshot;
     pushState?.(JSON.parse(snapshot));
@@ -507,7 +492,7 @@
     </div>
   {/each}
   <h4>Face</h4>
-  <small>{faceDetected ? `${faceW.toFixed(2)} · ${distance}` : "no face"}</small>
+  <small>{faceDetected ? `${faceW.toFixed(2)}` : "no face"}</small>
   <h4>Countdown</h4>
   <label class="slider">
     <span>y {countdownY}vh</span>
