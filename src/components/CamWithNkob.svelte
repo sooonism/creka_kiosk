@@ -25,15 +25,15 @@
   );
   // pose is for the face-on-left case (nkob on the right); mirrored when the face is on the right
   type Pose = { x: number; y: number; r: number; s: number };
-  let pose = $state<Pose>({ x: 100, y: 40, r: -15, s: 2.5 });
+  let pose = $state<Pose>({ x: 100, y: 60, r: -15, s: 2 });
   let savedPoses = $state<Pose[]>([]);
   const rand = (min: number, max: number) => Math.round(min + Math.random() * (max - min));
   let faceW = $state(0.3); // latest face box width as a fraction of the frame
-  const NKOB_SCALE = 2.5; // fixed size, no near/far zones
+  const NKOB_SCALE = 2; // fixed size, no near/far zones
   const rerollPose = () => {
     pose.s = NKOB_SCALE;
     pose.r = -rand(15, 45); // negative keeps the original tilt direction
-    pose.y = 40;
+    pose.y = 60; // % of its own height, higher = lower on screen
   };
   const nextPose = () => {
     poseIdx = (poseIdx + rand(1, NKOB_POSES.length - 1)) % NKOB_POSES.length; // random, never the same pose twice in a row
