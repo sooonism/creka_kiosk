@@ -235,6 +235,12 @@
     }
   }
 
+  // the × on the polaroid: slide it (and its QR) out now instead of waiting for the hold timer
+  function dismissPolaroid() {
+    clearTimeout(capturedExitTimer);
+    capturedPhase = "exiting";
+  }
+
   function setMode(m: typeof mode) {
     mode = m; // set before setStage below so its timers see the new mode
     if (m === "debug") {
@@ -528,6 +534,7 @@
     class:instant={capturedInstant}
   >
     <img src={capturedSrc} alt="Captured" />
+    <button class="close" aria-label="Close photo" onclick={dismissPolaroid}>×</button>
   </div>
 {/if}
 
@@ -784,6 +791,20 @@
   }
   .captured.show {
     transform: translate(-50%, -50%);
+  }
+  .captured .close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 44px;
+    height: 44px;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    font: 600 28px/1 system-ui, sans-serif;
+    cursor: pointer;
+    pointer-events: auto; /* .captured itself ignores the pointer */
   }
   .captured.exiting {
     transform: translate(calc(-50% + 160vw), -50%);
