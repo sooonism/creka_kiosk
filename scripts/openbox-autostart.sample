@@ -1,0 +1,38 @@
+#!/bin/bash
+
+# disable screen blanking, screen saver power management
+xset s off
+xset s noblank
+xset -dpms
+
+#hide cursor after 2 s
+unclutter -idle 2 -root &
+
+# wait (max ~2 min) until the kiosk site is reachable over https; a success also means
+# wifi, DNS and the clock (TLS) are ready. Launch anyway after the cap so the page can retry itself.
+for i in $(seq 60); do
+	curl -fsS -m 5 -o /dev/null https://kiosk.creka.online/ && break
+	sleep 2
+done
+
+# infinite loop to run chromium in kiosk mode
+while true; do
+	# after a power cut Chromium thinks it crashed and shows "Restore pages?"
+	sed -i 's/"exit_type":"Crashed"/"exit_type":"Normal"/; s/"exited_cleanly":false/"exited_cleanly":true/' \
+		~/.config/chromium/Default/Preferences ~/.config/chromium/"Local State" 2>/dev/null
+	chromium \
+		--kiosk \
+		--remote-debugging-port=9222 \
+		--no-first-run \
+		--noerrdialogs \
+		--disable-session-crashed-bubble \
+		--disable-infobars \
+		--no-sandbox \
+		--use-fake-ui-for-media-stream \
+		--ignore-gpu-blocklist \
+		--enable-webgl \
+		--enable-accelerated-2d-canvas \
+		--enable-gpu-rasterization \
+		"https://kiosk.creka.online/demo/camwithnkob/?kiosk=<kiosk-id>&mode=actual"
+	sleep 2
+done
