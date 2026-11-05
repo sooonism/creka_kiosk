@@ -188,7 +188,7 @@
 
   async function saveCapture(image: string) {
     savedPhotoId = null;
-    const res = await fetch("/api/save-capture", {
+    const res = await fetch("/api/save-capture" + location.search, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ image }),

@@ -2,8 +2,9 @@
 export interface Props {
   title: string;
   fullscreen?: boolean;
+  nav?: boolean;
 }
-const { title, fullscreen = false } = Astro.props;
+const { title, fullscreen = false, nav = true } = Astro.props;
 const pathname = Astro.url.pathname;
 ---
 
@@ -17,7 +18,7 @@ const pathname = Astro.url.pathname;
     <title>{title} — Creka Kiosk Admin</title>
   </head>
   <body class:list={{ fullscreen }}>
-    <nav class="admin-nav">
+    {nav && <nav class="admin-nav">
       <a href="/admin/button_greetings" class="nav-link" class:active={pathname === "/admin/button_greetings/"}>Button Greetings</a>
       <a href="/admin/camwithme" class="nav-link" class:active={pathname === "/admin/camwithme/"}>CamWithMe</a>
       <a href="/admin/gesture" class="nav-link" class:active={pathname === "/admin/gesture/"}>Gesture</a>
@@ -40,11 +41,21 @@ const pathname = Astro.url.pathname;
       <a href="/admin/camwithips/gooseday" class="nav-link" class:active={pathname === "/admin/camwithips/gooseday/"}>Gooseday</a>
       <a href="/admin/camwithips/peeyong" class="nav-link" class:active={pathname === "/admin/camwithips/peeyong/"}>Peeyong</a>
       <a href="/admin/camwithips/dreamocity" class="nav-link" class:active={pathname === "/admin/camwithips/dreamocity/"}>Dreamocity</a>
+      <a href="/admin/dashboard" class="nav-link" class:active={pathname === "/admin/dashboard/"}>🖥 Dashboard</a>
       <a href="/" class="nav-link home">← Main</a>
-    </nav>
+    </nav>}
     <main class:list={{ fullscreen }}>
       <slot />
     </main>
+<script is:inline>
+      // heartbeat for /admin/dashboard: only runs when opened via /k/<id> (?kiosk=<id>)
+      const kid = new URLSearchParams(location.search).get("kiosk");
+      if (kid) {
+        const beat = () => fetch(`/api/heartbeat?kiosk=${kid}`, { method: "POST", body: JSON.stringify({ page: location.pathname, w: innerWidth, h: innerHeight }) }).catch(() => {});
+        beat();
+        setInterval(beat, 20000);
+      }
+    </script>
   </body>
 </html>
 

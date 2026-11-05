@@ -333,6 +333,11 @@
   dependencies:
     "@types/unist" "*"
 
+"@types/phoenix@^1.6.8":
+  version "1.6.8"
+  resolved "https://registry.npmjs.org/@types/phoenix/-/phoenix-1.6.8.tgz"
+  integrity sha512-8uBiGk2kDk+e0/9eq8CWuDG5VLrS50roV4doR3xn21/EL8olbWSi2TBNa/CFJS00VLOuawH/UGQQsn+2W8tNrA==
+
 "@types/trusted-types@^2.0.7":
   version "2.0.7"
   resolved "https://registry.npmjs.org/@types/trusted-types/-/trusted-types-2.0.7.tgz"
@@ -1220,6 +1225,11 @@ path-exists@^4.0.0:
   version "4.0.0"
   resolved "https://registry.npmjs.org/path-exists/-/path-exists-4.0.0.tgz"
   integrity sha512-ak9Qy5Q7jYb2Wwcey5Fpvg2KoAc/ZIhLSLOSBmRmygPsGwkVVt0fZa0qrtMz+m6tJTAHfZQ8FnmB4MG4LWy7/w==
+
+phoenix@^1.8.16:
+  version "1.8.16"
+  resolved "https://registry.npmjs.org/phoenix/-/phoenix-1.8.16.tgz"
+  integrity sha512-bNNJkYBnES2MHo8XjBg6ROK7iU7FeYfkANpTnYzh2ecOipI+8ZF1wiiWdvqv2YfV4MVb9yFJBE2BPF+RXgXXuw==
 
 piccolore@^0.1.3:
   version "0.1.3"

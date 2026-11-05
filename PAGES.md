@@ -21,3 +21,4 @@
 | `/admin/finger_paint` | `FingerPaint.svelte` | Gesture-based: point to paint, fist to stop | 🟡 WIP |
 | `/admin/perf_debug` | `PerfDebug.svelte` | Performance debug: camera/MP/resolution tuning for OrangePi | ✅ Done |
 | `/admin/slide_show` | `SlideShow.svelte` | Simple image slideshow with auto-advance | ✅ Done |
+| `/admin/dashboard` | `Dashboard.svelte` (`KiosksAdmin`, `AppsList`) | Tabs: Kiosks (collapsible fleet, module, hardware, captures) + Apps (every page, list in `src/lib/apps.ts`); OTP admin login | 🟡 WIP |

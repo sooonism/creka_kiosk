@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from "svelte";
   import QRCode from "qrcode";
   import CamWithMe from "./CamWithMe.svelte";
+  import { openKioskLink, dayMYT, hourMYT } from "../lib/kioskLink";
 
   let { src }: { src: string } = $props();
   let faceDetected = $state(false);
@@ -77,9 +78,10 @@
   const STAGES = ["idle", "waking", "greet", "reveal", "countdown", "snapped"] as const;
   type Stage = (typeof STAGES)[number];
   let stage = $state<Stage>("idle");
-  let mode = $state<"actual" | "debug">("debug");
+  // ?mode=actual starts the real kiosk flow; anything else (default) is debug
+  let mode = $state<"actual" | "debug">(typeof location !== "undefined" && new URLSearchParams(location.search).get("mode") === "actual" ? "actual" : "debug");
   let count = $state(5);
-  let sidebarOpen = $state(true);
+  let sidebarOpen = $state(mode === "debug"); // no debug panel over a live kiosk
   let isFullscreen = $state(false);
   let mouseIdle = $state(false);
   let uiHidden = $derived(mouseIdle && isFullscreen); // auto-hide only while fullscreen
@@ -99,6 +101,75 @@
     countdownY = Number(localStorage.getItem("nkob-countdown-y") ?? countdownY);
     savedPoses = JSON.parse(localStorage.getItem("nkob-poses") ?? "[]");
   });
+  // backend link (creka_backend `kiosk:<id>` channel): pushes UI state for the remote, applies its commands,
+  // heartbeats after 30 idle minutes, reports errors and a daily wake-up check
+  let pushState: ((st: object) => void) | null = null;
+  onMount(() => {
+    const apply = (c: any) => {
+      if (c.type === "mode") setMode(c.value);
+      else if (c.type === "sidebar") sidebarOpen = c.value;
+      else if (c.type === "stage") setStage(c.value);
+      else if (c.type === "snap") setStage("snapped");
+      else if (c.type === "pose") pose[c.key as keyof Pose] = c.value;
+      else if (c.type === "savePose") savedPoses = [...savedPoses, { ...pose }];
+      else if (c.type === "applyPose" && savedPoses[c.i]) pose = { ...pose, ...savedPoses[c.i] };
+      else if (c.type === "deletePose") savedPoses = savedPoses.filter((_, j) => j !== c.i);
+      else if (c.type === "countdownY") countdownY = c.value;
+    };
+
+    let lastSent = Date.now();
+    let lastWakeup: { at: number; camera: boolean; model: boolean } | null = null;
+    const push = (event: string, payload: object) => {
+      lastSent = Date.now();
+      link.channel.push(event, payload);
+    };
+    const wakeupCheck = () => {
+      // camCanvas is set by CamWithMe's onReady, i.e. camera stream and face model both came up
+      lastWakeup = { at: Date.now(), camera: !!camCanvas, model: !!camCanvas };
+      push("wakeup", lastWakeup);
+    };
+
+    const link = openKioskLink("kiosk", kiosk ?? "default", {
+      // on every (re)join, e.g. after a backend restart, the backend gets today's wake-up report again
+      onJoin: () => {
+        if (lastWakeup) push("wakeup", lastWakeup);
+        if (lastState) push("state", JSON.parse(lastState)); // so a remote that joins later sees the current UI
+      },
+    });
+    pushState = (st) => push("state", st);
+    link.channel.on("cmd", apply);
+
+    const onError = (e: ErrorEvent | PromiseRejectionEvent) => {
+      const err: any = "reason" in e ? e.reason : e.error;
+      push("error", { message: err?.message ?? String(err ?? (e as ErrorEvent).message), detail: err?.stack ?? "", page: location.pathname });
+    };
+    window.addEventListener("error", onError);
+    window.addEventListener("unhandledrejection", onError);
+
+    const firstCheck = setTimeout(wakeupCheck, 20_000); // give the camera and model time to load
+    const timer = setInterval(() => {
+      if (Date.now() - lastSent >= 30 * 60_000) push("heartbeat", {});
+      // left on overnight: run the morning check again once a new day starts (from 07:00)
+      if (hourMYT() >= 7 && (!lastWakeup || dayMYT(lastWakeup.at) !== dayMYT())) wakeupCheck();
+    }, 60_000);
+
+    return () => {
+      clearTimeout(firstCheck);
+      clearInterval(timer);
+      window.removeEventListener("error", onError);
+      window.removeEventListener("unhandledrejection", onError);
+      pushState = null;
+      link.close();
+    };
+  });
+  // push the UI state whenever it changes (JSON compare keeps the per-frame face size from flooding the socket)
+  let lastState = "";
+  $effect(() => {
+    const snapshot = JSON.stringify({ mode, stage, sidebarOpen, pose, savedPoses, countdownY, faceDetected, faceW: Math.round(faceW * 100) / 100, distance });
+    if (snapshot === lastState) return;
+    lastState = snapshot;
+    pushState?.(JSON.parse(snapshot));
+  });
   $effect(() => {
     localStorage.setItem("nkob-poses", JSON.stringify(savedPoses));
   });
@@ -114,12 +185,12 @@
     let t: any;
     const wait = (ms: number) => new Promise((r) => (t = setTimeout(r, ms)));
     (async () => {
-      const ids: string[] = await fetch("/api/captures").then((r) => r.json()).catch(() => []);
+      const ids: string[] = await fetch("/api/captures" + location.search).then((r) => r.json()).catch(() => []);
       while (alive && ids.length) {
         idleShots = [...ids]
           .sort(() => Math.random() - 0.5)
           .slice(0, 3)
-          .map((id) => ({ src: `/captures/demo/camwithnkob/${id}.png`, r: rand(-8, 8) }));
+          .map((id) => ({ src: `/captures/demo/camwithnkob/${kioskDir}${id}.png`, r: rand(-8, 8) }));
         await wait(100); // let the new images mount at opacity 0 so the fade-in runs
         idleShow = true;
         await wait(4000);
@@ -315,17 +386,22 @@
     return out.toDataURL("image/png");
   }
 
+  // per-kiosk capture folder, set via /k/<id> → ?kiosk=<id>
+  const kiosk = typeof location === "undefined" ? null : new URLSearchParams(location.search).get("kiosk");
+  const kioskDir = kiosk ? `${kiosk}/` : "";
+  const kioskQuery = kiosk ? `&kiosk=${kiosk}` : "";
+
   async function saveCapture(image: string) {
     savedPhotoId = null;
-    const res = await fetch("/api/save-capture", {
+    const res = await fetch("/api/save-capture" + location.search, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image }),
+      body: JSON.stringify({ image, meta: { pose: poseIdx } }),
     });
     if (!res.ok) return;
     const { id } = await res.json();
     savedPhotoId = id;
-    const qr = await QRCode.toDataURL(`${location.origin}/photo?id=${id}`, { margin: 1, width: 400 });
+    const qr = await QRCode.toDataURL(`${location.origin}/photo?id=${id}${kioskQuery}`, { margin: 1, width: 400 });
     const shot = recentShots.find((s) => s.src === image);
     if (shot) shot.qr = qr;
   }

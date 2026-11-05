@@ -1,0 +1,11 @@
+---
+export const prerender = false;
+import { backend, touchKiosk, validId } from '../../lib/kiosks';
+
+// stable per-kiosk entry URL: the Pi always opens /k/<id>, the module is picked in /admin/dashboard
+const res = validId(Astro.params.id) ? await backend(`/kiosks/${Astro.params.id}`).catch(() => null) : null;
+if (!res?.ok) return new Response('Unknown kiosk', { status: res ? 404 : 502 });
+const kiosk = await res.json();
+await touchKiosk(kiosk.id);
+return Astro.redirect(`${kiosk.module}?kiosk=${kiosk.id}&mode=actual`);
+---

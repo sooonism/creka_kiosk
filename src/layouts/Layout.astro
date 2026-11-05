@@ -10,6 +10,15 @@
 	</head>
 	<body>
 		<slot />
+<script is:inline>
+      // heartbeat for /admin/dashboard: only runs when opened via /k/<id> (?kiosk=<id>)
+      const kid = new URLSearchParams(location.search).get("kiosk");
+      if (kid) {
+        const beat = () => fetch(`/api/heartbeat?kiosk=${kid}`, { method: "POST", body: JSON.stringify({ page: location.pathname, w: innerWidth, h: innerHeight }) }).catch(() => {});
+        beat();
+        setInterval(beat, 20000);
+      }
+    </script>
 	</body>
 </html>
 
