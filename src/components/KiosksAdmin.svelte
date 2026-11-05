@@ -57,10 +57,13 @@
   const verify = async () => { if (await auth({ email, otp })) { otp = ""; sent = false; await load(true); } };
   const logout = async () => { await fetch("/api/auth", { method: "DELETE" }); kiosks = []; login = true; };
 
+  // which cards are open, by id: a save/poll re-renders the card from fresh data and must not collapse it
+  let opened = $state<Record<string, boolean>>({});
+
   async function save(k: K) {
     const r = await fetch("/api/kiosks", { method: "POST", headers: headers(), body: JSON.stringify(k) });
     msg = r.ok ? `saved ${k.id}` : `error: ${(await r.json()).error}`;
-    if (r.ok) await load(true);
+    if (r.ok) (opened[k.id] = true), await load(true);
   }
 
   async function remove(k: K) {
@@ -128,8 +131,8 @@
   <span class="msg">{msg}</span>
 </p>
 
-{#each kiosks as k (k.id || k)}
-  <details class="card" open={k.fresh}>
+{#each kiosks as k (k)}
+  <details class="card" open={opened[k.id] ?? k.fresh} ontoggle={(e) => (opened[k.id] = e.currentTarget.open)}>
     <summary>
       <span class="dot" class:on={online(k)} title={k.beat ? `${k.beat.page} ${k.beat.w}x${k.beat.h}` : "offline"}></span>
       <b>{k.name || k.id || "new kiosk"}</b>
