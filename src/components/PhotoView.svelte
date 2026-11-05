@@ -152,6 +152,7 @@
 {/if}
 
 <div class="wrap">
+  <a class="by" href="https://www.instagram.com/creka_community?mdxt=MWd6Y3g3N2xtcnl2eQ==" target="_blank" rel="noopener">Kiosk by Creka</a>
   <img class="logo" src="/img/demo/camwithnkob/nkoblogo_b.svg" alt="Nkob" />
   {#if !src}
     <p>No photo id given. Visit this page as <code>/photo?id=&lt;id&gt;</code>.</p>
@@ -184,6 +185,12 @@
 </div>
 
 <style>
+  .by {
+    color: #e1e4ea;
+    opacity: 0.7;
+    font-size: 13px;
+    text-decoration: none;
+  }
   .wrap {
     min-height: 100vh;
     display: flex;
