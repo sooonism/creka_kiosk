@@ -29,8 +29,9 @@
   let savedPoses = $state<Pose[]>([]);
   const rand = (min: number, max: number) => Math.round(min + Math.random() * (max - min));
   let faceW = $state(0.3); // latest face box width as a fraction of the frame
-  let distance = $derived(faceW >= 0.3 ? "near" : faceW < 0.25 ? "far" : "mid");
-  const SCALE_RANGE = { far: [1.5, 2.5], mid: [2.5, 3.5], near: [3.5, 4.5] };
+  // two zones; between 0.25 and 0.3 the zone you were in holds, so hovering at the cutoff doesn't flip it
+  let distance = $state<"near" | "far">("near");
+  const SCALE_RANGE = { far: [1.5, 2.5], near: [3.5, 4.5] };
   const rerollPose = () => {
     // pick a scale range by how close the user is (face box width / frame width)
     const [lo, hi] = SCALE_RANGE[distance];
@@ -46,7 +47,9 @@
   function onFaceSize(w: number) {
     const before = distance;
     faceW = w;
-    // near/mid/far change = new pose + scale; cooldown stops jitter at a cutoff from spamming it
+    if (w >= 0.3) distance = "near";
+    else if (w < 0.25) distance = "far";
+    // near/far change = new pose + scale; cooldown stops jitter at a cutoff from spamming it
     if (distance !== before && performance.now() - lastZoneChange > 1000) {
       lastZoneChange = performance.now();
       nextPose();
