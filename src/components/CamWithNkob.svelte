@@ -25,11 +25,11 @@
   );
   // pose is for the face-on-left case (nkob on the right); mirrored when the face is on the right
   type Pose = { x: number; y: number; r: number; s: number };
-  let pose = $state<Pose>({ x: 100, y: 60, r: -15, s: 2 });
+  let pose = $state<Pose>({ x: 100, y: 60, r: -15, s: 1.5 });
   let savedPoses = $state<Pose[]>([]);
   const rand = (min: number, max: number) => Math.round(min + Math.random() * (max - min));
   let faceW = $state(0.3); // latest face box width as a fraction of the frame
-  const NKOB_SCALE = 2; // fixed size, no near/far zones
+  const NKOB_SCALE = 1.5; // fixed size, no near/far zones
   const rerollPose = () => {
     pose.s = NKOB_SCALE;
     pose.r = -rand(15, 45); // negative keeps the original tilt direction
@@ -219,7 +219,7 @@
         if (--count <= 0) setStage("snapped");
       }, 1000);
     } else if (next === "snapped") {
-      stageTimer = setTimeout(() => setStage("waking"), 14000); // 11s hold + 3s slide-out, then fade into waking
+      stageTimer = setTimeout(() => setStage("waking"), 23000); // 20s hold + 3s slide-out, then fade into waking
     }
   }
 
@@ -245,10 +245,10 @@
     if (mode !== "debug" && (stage === "waking" || stage === "greet") && !faceDetected) setStage("idle");
   });
 
-  // face held in frame for 1s while idle -> wake up
+  // face held in frame for 0.5s while idle -> wake up
   $effect(() => {
     if (mode === "debug" || stage !== "idle" || !faceDetected) return;
-    const t = setTimeout(() => setStage("waking"), 1000);
+    const t = setTimeout(() => setStage("waking"), 500);
     return () => clearTimeout(t);
   });
 
@@ -335,10 +335,10 @@
       requestAnimationFrame(() => {
         capturedInstant = false;
         capturedPhase = "shown";
-        // 3s slide-in + 8s hold, then slide out
+        // 20s on screen (3s slide-in included), then slide out
         if (mode !== "debug") capturedExitTimer = setTimeout(() => {
           capturedPhase = "exiting";
-        }, 11000);
+        }, 20000);
       });
     });
 
@@ -427,7 +427,9 @@
     debug={false}
     aspect={1}
     onFaceCount={(count) => (faceDetected = count > 0)}
-    onFacePosition={(x) => (faceOnRight = x > 0.5)}
+    onFacePosition={(x, both) => {
+      if (!both) faceOnRight = x > 0.5; // people on both sides: stay on the current side
+    }}
     {onFaceSize}
     onReady={(canvas) => (camCanvas = canvas)}
   />

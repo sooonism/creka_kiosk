@@ -10,7 +10,7 @@
     aspect = 0,
   }: {
     onFaceCount?: (count: number) => void;
-    onFacePosition?: (normalizedX: number) => void;
+    onFacePosition?: (normalizedX: number, bothSides: boolean) => void; // bothSides: faces on the left and the right half at once
     onFaceSize?: (normalizedWidth: number) => void; // face box width / frame width
     onReady?: (canvas: HTMLCanvasElement) => void;
     debug?: boolean; // face boxes/keypoints + HUD overlays on the canvas
@@ -206,7 +206,8 @@
           if (box && canvas.width) {
             // mirrored on screen, so flip the raw center before normalizing
             const mirroredCenterX = crop.w - (box.originX + box.width / 2 - crop.x);
-            onFacePosition?.(mirroredCenterX / crop.w);
+            const xs = lastResult.detections.map((d: any) => (crop.w - (d.boundingBox.originX + d.boundingBox.width / 2 - crop.x)) / crop.w);
+            onFacePosition?.(mirroredCenterX / crop.w, xs.some((x: number) => x < 0.5) && xs.some((x: number) => x > 0.5));
             onFaceSize?.(box.width / crop.w);
           }
         }
