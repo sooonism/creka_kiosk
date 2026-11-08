@@ -56,7 +56,7 @@
 
   $effect(() => {
     if (!savedPhotoId) return;
-    QRCode.toDataURL(`${location.origin}/photo?id=${savedPhotoId}${kioskQuery}`, { margin: 1, width: 400 }).then(
+    QRCode.toDataURL(`${location.origin}/photo?id=${savedPhotoId}${kioskQuery}&s=qr`, { margin: 1, width: 400 }).then(
       (url) => (qrSrc = url)
     );
   });
@@ -415,7 +415,7 @@
     if (!res.ok) return;
     const { id } = await res.json();
     savedPhotoId = id;
-    const qr = await QRCode.toDataURL(`${location.origin}/photo?id=${id}${kioskQuery}`, { margin: 1, width: 400 });
+    const qr = await QRCode.toDataURL(`${location.origin}/photo?id=${id}${kioskQuery}&s=qr`, { margin: 1, width: 400 });
     const shot = recentShots.find((s) => s.src === image);
     if (shot) shot.qr = qr;
   }

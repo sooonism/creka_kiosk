@@ -14,12 +14,33 @@
   let copied = $state<boolean | null>(null);
 
   // count what the visitor does, per kiosk (the QR carries ?kiosk=<id>); a tap, not proof the share was sent
-  function track(type: 'open' | 'whatsapp' | 'instagram') {
+  // ?s= says where the visitor came from: qr = the kiosk's QR, wa = a link shared on WhatsApp (see shareToWA)
+  function track(type: 'open' | 'whatsapp' | 'instagram' | 'save' | 'profile') {
     const q = new URLSearchParams(location.search);
     const kiosk = q.get('kiosk');
-    if (kiosk) fetch(`/api/event?kiosk=${kiosk}`, { method: 'POST', body: JSON.stringify({ type, photo: q.get('id') }), keepalive: true }).catch(() => {});
+    const s = q.get('s');
+    const source = s === 'qr' || s === 'wa' ? s : '';
+    if (kiosk) fetch(`/api/event?kiosk=${kiosk}`, { method: 'POST', body: JSON.stringify({ type, photo: q.get('id'), source }), keepalive: true }).catch(() => {});
   }
-  onMount(() => track('open'));
+  // one open per photo per device: a refresh or a second look at the same link doesn't count again
+  onMount(() => {
+    const key = `opened:${new URLSearchParams(location.search).get('id')}`;
+    try {
+      if (localStorage.getItem(key)) return;
+      localStorage.setItem(key, '1');
+    } catch {} // storage blocked: count every open
+    track('open');
+  });
+
+  // download the (doodled) photo: the fallback for people who don't use WhatsApp or Instagram
+  async function savePhoto() {
+    track('save');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(await photoFile());
+    a.download = 'creka.png';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  }
 
   // IG ignores caption passed via share/URL, so copy it for the user to paste.
   async function shareToIG() {
@@ -37,7 +58,9 @@
   // WhatsApp: attach the (doodled) image together with the link; no file share support: link-only wa.me
   async function shareToWA() {
     track('whatsapp');
-    const text = `${waCaption}\n${location.href}`;
+    const link = new URL(location.href);
+    link.searchParams.set('s', 'wa'); // whoever opens the shared link is counted as coming from WhatsApp
+    const text = `${waCaption}\n${link}`;
     const file = await photoFile();
     if (navigator.canShare?.({ files: [file] })) {
       await navigator.share({ files: [file], text }).catch(() => {});
@@ -153,7 +176,7 @@
 {/if}
 
 <div class="wrap">
-  <a class="by" href="https://www.instagram.com/creka_community?mdxt=MWd6Y3g3N2xtcnl2eQ==" target="_blank" rel="noopener">Kiosk by Creka</a>
+  <a class="by" href="https://www.instagram.com/creka_community?mdxt=MWd6Y3g3N2xtcnl2eQ==" target="_blank" rel="noopener" onclick={() => track('profile')}>Kiosk by Creka</a>
   <img class="logo" src="/img/demo/camwithnkob/nkoblogo_b.svg" alt="Nkob" />
   {#if !src}
     <p>No photo id given. Visit this page as <code>/photo?id=&lt;id&gt;</code>.</p>
@@ -178,6 +201,7 @@
       </div>
       <button class="share" onclick={shareToWA}>Share via WhatsApp</button>
       <button class="share ig" onclick={shareToIG}>Share to Instagram</button>
+      <button class="share clear" onclick={savePhoto}>Save photo</button>
       {#if copied !== null}
         <p class="caption-note">{copied ? 'Caption copied. Paste it in Instagram:' : 'Copy this caption:'} {igCaption}</p>
       {/if}
