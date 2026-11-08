@@ -15,7 +15,7 @@
 
   // count what the visitor does, per kiosk (the QR carries ?kiosk=<id>); a tap, not proof the share was sent
   // ?s= says where the visitor came from: qr = the kiosk's QR, wa = a link shared on WhatsApp (see shareToWA)
-  function track(type: 'open' | 'whatsapp' | 'instagram' | 'save' | 'profile') {
+  function track(type: 'open' | 'whatsapp' | 'instagram' | 'save' | 'profile' | 'creka' | 'sponsor') {
     const q = new URLSearchParams(location.search);
     const kiosk = q.get('kiosk');
     const s = q.get('s');
@@ -144,7 +144,7 @@
 
 {#if sponsor}
   <div class="sponsor" class:show={sponsorShow}>
-    <div class="sponsor-box">
+    <div class="sponsor-box" role="presentation" onclick={() => track('sponsor')}>
       <small>presented by</small>
       <strong>{sponsor}</strong>
     </div>
@@ -207,6 +207,7 @@
       {/if}
     {/if}
   {/if}
+  <a class="by" href="https://creka.online" target="_blank" rel="noopener" onclick={() => track('creka')}>Powered by Creka</a>
 </div>
 
 <style>
@@ -288,6 +289,9 @@
   }
   .sponsor.show {
     opacity: 1;
+  }
+  .sponsor.show .sponsor-box {
+    pointer-events: auto; /* tappable only while the banner is visible, so the click can be counted */
   }
   .caption-note {
     white-space: pre-line; /* keep the line break before the hashtags */

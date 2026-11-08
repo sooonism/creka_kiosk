@@ -203,7 +203,7 @@
 
       <div>
         <h3>Captures <small>{k.captures ?? 0} files</small></h3>
-        <small>Visitors: {k.events?.open ?? 0} opened the photo ({k.events?.open_qr ?? 0} from the QR · {k.events?.open_wa ?? 0} from a WhatsApp link) · {k.events?.whatsapp ?? 0} tapped WhatsApp · {k.events?.instagram ?? 0} tapped Instagram · {k.events?.save ?? 0} saved · {k.events?.profile ?? 0} tapped Kiosk by Creka</small>
+        <small>Visitors: {k.events?.open ?? 0} opened the photo ({k.events?.open_qr ?? 0} from the QR · {k.events?.open_wa ?? 0} from a WhatsApp link) · {k.events?.whatsapp ?? 0} tapped WhatsApp · {k.events?.instagram ?? 0} tapped Instagram · {k.events?.save ?? 0} saved · {k.events?.profile ?? 0} tapped Kiosk by Creka · {k.events?.creka ?? 0} tapped Powered by Creka · {k.events?.sponsor ?? 0} tapped the sponsor</small>
         <code>{dir(k)}</code>
         <div class="thumbs">
           {#each thumbs[k.id] ?? [] as id (id)}
