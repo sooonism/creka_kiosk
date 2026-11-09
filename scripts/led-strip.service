@@ -1,0 +1,12 @@
+[Unit]
+Description=Kiosk WS2812 LED strip (localhost:8765)
+After=multi-user.target
+
+[Service]
+ExecStart=/usr/bin/python3 /home/orangepi/led-strip.py
+Environment=LED_COUNT=30 LED_COLOR=FFFFFF LED_BRIGHT=0.5 LED_SPI=1,0
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target

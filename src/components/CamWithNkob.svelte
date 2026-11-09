@@ -252,6 +252,18 @@
     return () => clearTimeout(t);
   });
 
+  // LED strip (scripts/led-strip.py on the Pi, localhost): lit from the wake-up until the next idle.
+  // Re-sent every 60s because the daemon switches itself off after 120s without an /on.
+  const led = (on: boolean) => fetch(`http://127.0.0.1:8765/${on ? "on" : "off"}`, { mode: "no-cors" }).catch(() => {});
+  $effect(() => {
+    if (mode === "debug") return;
+    const on = stage !== "idle";
+    led(on);
+    if (!on) return;
+    const t = setInterval(() => led(true), 60_000);
+    return () => clearInterval(t);
+  });
+
   onDestroy(() => {
     if (capturedExitTimer) clearTimeout(capturedExitTimer);
     clearTimeout(stageTimer);
