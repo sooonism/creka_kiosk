@@ -85,6 +85,16 @@
     mouseTimer = setTimeout(() => (mouseIdle = true), 2000);
   }
   let countdownY = $state(15); // vh from the top
+  // decode every image the flow shows up front, so the first reveal/greet doesn't hitch on a cold decode
+  const warm: HTMLImageElement[] = [];
+  onMount(() => {
+    for (const src of [...NKOB_POSES, ...Object.values(COVER_IMG), "/img/demo/camwithnkob/bg.webp"]) {
+      const img = new Image();
+      img.src = src;
+      img.decode().catch(() => {});
+      warm.push(img); // keep a reference so the decoded bitmap isn't dropped
+    }
+  });
   onMount(() => {
     onMouseMove(); // start the 2s hide timer even if the mouse never moves
     countdownY = Number(localStorage.getItem("nkob-countdown-y") ?? countdownY);
@@ -251,11 +261,9 @@
     if (mode !== "debug" && (stage === "waking" || stage === "greet") && !faceDetected) setStage("idle");
   });
 
-  // face held in frame for 0.5s while idle -> wake up
+  // face seen while idle -> wake up at once; if it doesn't hold, the effect above sends it back to idle
   $effect(() => {
-    if (mode === "debug" || stage !== "idle" || !faceDetected) return;
-    const t = setTimeout(() => setStage("waking"), 500);
-    return () => clearTimeout(t);
+    if (mode !== "debug" && stage === "idle" && faceDetected) setStage("waking");
   });
 
   // LED strip (scripts/led-strip.py on the Pi, localhost): lit from the wake-up until the next idle.
@@ -453,7 +461,7 @@
   <CamWithMe
     debug={false}
     aspect={1}
-    detectMs={1000}
+    detectMs={stage === "idle" ? 250 : 500}
     lowPower={stage === "idle" && mode !== "debug"}
     paint={stage === "reveal" || stage === "countdown" || stage === "snapped" || mode === "debug"}
     onFaceCount={(count) => (faceDetected = count > 0)}

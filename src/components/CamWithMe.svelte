@@ -40,6 +40,7 @@
 
   // Detection state
   let frameCount = 0;
+  let lastPaintT = -1; // video.currentTime of the last painted frame
   let lastFpsUpdate = 0;
 
   // MediaPipe
@@ -281,10 +282,14 @@
           sendFrame();
         }
 
-        // Single canvas: mirrored video + bbox/keypoints + HUD
-        if (paint) drawFrame(lastResult);
-
-        frameCount++;
+        // Single canvas: mirrored video + bbox/keypoints + HUD. Paint only when the camera delivered a new frame
+        // (the screen refreshes at 60 Hz, the camera at ~30), so the main thread isn't redrawing identical pixels
+        if (!paint) lastPaintT = -1;
+        else if (video.currentTime !== lastPaintT) {
+          lastPaintT = video.currentTime;
+          drawFrame(lastResult);
+          frameCount++;
+        }
         if (now - lastFpsUpdate > 1000) {
           fps = Math.round((frameCount * 1000) / (now - lastFpsUpdate));
           frameCount = 0;
