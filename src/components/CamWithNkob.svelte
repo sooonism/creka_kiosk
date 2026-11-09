@@ -587,12 +587,9 @@
 
 <div class="bg bg-snap" class:show={stage === "snapped"}></div>
 
-<div class="frame"></div>
-
 <style>
-  /* z-index layers: 10 bg, 20 livecam, 30 cover (idle/waking), 40 countdown, 50 flash, 55 bg (after snap), 60 captured+qr, 70 frame, 101 debug, 110 sidebar toggle */
-  .bg,
-  .frame {
+  /* z-index layers: 10 bg, 20 livecam, 30 cover (idle/waking), 40 countdown, 50 flash, 55 bg (after snap), 60 captured+qr, 101 debug, 110 sidebar toggle */
+  .bg {
     position: fixed;
     inset: 0;
     background: center / cover no-repeat;
@@ -610,11 +607,6 @@
   .bg-snap.show {
     opacity: 1;
     transition-duration: 1s;
-  }
-  .frame {
-    z-index: 70;
-    background-position: top; /* always align top; cover crops the bottom */
-    background-image: url("/img/demo/camwithnkob/frame.png");
   }
   .livecam {
     position: fixed;
@@ -867,7 +859,7 @@
   }
   .idle-shots.top {
     bottom: auto;
-    /* frame.png is 2160x4200 with a 473px solid top border, drawn cover + top-aligned: start below that border, and at least one polaroid down */
+    /* keeps the layout from when a 2160x4200 frame (473px top border) was drawn cover + top-aligned: start below that, and at least one polaroid down */
     top: max(calc(6vh + 18vw), calc(473 * max(100vw / 2160, 100vh / 4200) + 1.5vh));
   }
   .idle-shots.show {
@@ -878,7 +870,6 @@
     max-width: none;
     max-height: none;
     border-radius: 4px;
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
     transition: none;
   }
   .recent {
