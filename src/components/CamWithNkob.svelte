@@ -16,6 +16,7 @@
     greet: "/img/demo/camwithnkob/greet.png",
   };
   let camCanvas: HTMLCanvasElement | null = null;
+  let camStatus = { camera: false, model: false };
   let nkobEl: HTMLImageElement;
   let previewCanvas: HTMLCanvasElement;
 
@@ -112,8 +113,7 @@
       link.channel.push(event, payload);
     };
     const wakeupCheck = () => {
-      // camCanvas is set by CamWithMe's onReady, i.e. camera stream and face model both came up
-      lastWakeup = { at: Date.now(), camera: !!camCanvas, model: !!camCanvas };
+      lastWakeup = { at: Date.now(), ...camStatus };
       push("wakeup", lastWakeup);
     };
 
@@ -165,6 +165,12 @@
     localStorage.setItem("nkob-countdown-y", String(countdownY));
   });
   // idle: fade past polaroids in and out, 3 random ones at the bottom and 3 more along the top, each tilted a bit
+  // captures from before thumbnails existed only have the full png
+  const fullSize = (e: Event) => {
+    const img = e.currentTarget as HTMLImageElement;
+    img.onerror = null;
+    img.src = img.src.replace(".thumb.jpg", ".png");
+  };
   let idleShots = $state<{ src: string; r: number }[]>([]);
   let idleShow = $state(false);
   $effect(() => {
@@ -178,7 +184,7 @@
         idleShots = [...ids]
           .sort(() => Math.random() - 0.5)
           .slice(0, 6)
-          .map((id) => ({ src: `/captures/demo/camwithnkob/${kioskDir}${id}.png`, r: rand(-8, 8) }));
+          .map((id) => ({ src: `/captures/demo/camwithnkob/${kioskDir}${id}.thumb.jpg`, r: rand(-8, 8) }));
         await wait(100); // let the new images mount at opacity 0 so the fade-in runs
         idleShow = true;
         await wait(4000);
@@ -331,12 +337,16 @@
     flashOpacity = 0;
   }
 
-  function captureNow() {
+  async function captureNow() {
     if (!previewCanvas) return;
-    drawPreview();
-    capturedSrc = buildFramedCapture();
+    drawPreview(); // reads nkob's position, so it must run now, not after the encode
+    const blob = await buildFramedCapture(); // PNG encode is async: the flash and countdown never stall on it
+    if (!blob) return;
+    capturedSrc = URL.createObjectURL(blob);
     caption = pickCaption(caption);
-    recentShots = [...recentShots, { src: capturedSrc, qr: null }].slice(-3);
+    const all = [...recentShots, { src: capturedSrc, qr: null }];
+    all.slice(0, -3).forEach((s) => URL.revokeObjectURL(s.src));
+    recentShots = all.slice(-3);
 
     if (capturedExitTimer) clearTimeout(capturedExitTimer);
     // snap instantly back to the above-top-right origin (no transition) in case
@@ -355,7 +365,7 @@
     });
 
     qrSrc = null;
-    saveCapture(capturedSrc);
+    saveCapture(blob, capturedSrc);
   }
 
   const CAPTIONS = [
@@ -376,7 +386,7 @@
 
   // Bakes the white polaroid border + caption into a fixed
   // 1080x1080 PNG; the feed is cover-cropped into the photo window.
-  function buildFramedCapture(): string {
+  function buildFramedCapture(): Promise<Blob | null> {
     const w = 1080;
     const h = 1080;
     const border = 40;
@@ -409,7 +419,7 @@
     ctx.font = `600 ${size}px system-ui, -apple-system, sans-serif`;
     ctx.fillText(caption, w / 2, h - bottom / 2);
 
-    return out.toDataURL("image/png");
+    return new Promise((res) => out.toBlob(res, "image/png"));
   }
 
   // per-kiosk capture folder, set via /k/<id> → ?kiosk=<id>
@@ -417,12 +427,17 @@
   const kioskDir = kiosk ? `${kiosk}/` : "";
   const kioskQuery = kiosk ? `&kiosk=${kiosk}` : "";
 
-  async function saveCapture(image: string) {
+  async function saveCapture(blob: Blob, image: string) {
     savedPhotoId = null;
+    const dataUrl = await new Promise<string>((res) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result as string);
+      r.readAsDataURL(blob);
+    });
     const res = await fetch("/api/save-capture" + location.search, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image, meta: { pose: poseIdx } }),
+      body: JSON.stringify({ image: dataUrl, meta: { pose: poseIdx } }),
     });
     if (!res.ok) return;
     const { id } = await res.json();
@@ -438,12 +453,14 @@
   <CamWithMe
     debug={false}
     aspect={1}
+    paint={stage === "reveal" || stage === "countdown" || stage === "snapped" || mode === "debug"}
     onFaceCount={(count) => (faceDetected = count > 0)}
     onFacePosition={(x, both) => {
       if (!both) faceOnRight = x > 0.5; // people on both sides: stay on the current side
     }}
     {onFaceSize}
     onReady={(canvas) => (camCanvas = canvas)}
+    onStatus={(st) => (camStatus = st)}
   />
   <div class="slot">
     <img
@@ -466,12 +483,12 @@
 
 <div class="idle-shots" class:show={idleShow}>
   {#each idleShots.slice(0, 3) as shot}
-    <img src={shot.src} alt="Past shot" style:transform="rotate({shot.r}deg)" />
+    <img src={shot.src} alt="Past shot" style:transform="rotate({shot.r}deg)" onerror={fullSize} />
   {/each}
 </div>
 <div class="idle-shots top" class:show={idleShow}>
   {#each idleShots.slice(3) as shot}
-    <img src={shot.src} alt="Past shot" style:transform="rotate({shot.r}deg)" />
+    <img src={shot.src} alt="Past shot" style:transform="rotate({shot.r}deg)" onerror={fullSize} />
   {/each}
 </div>
 
@@ -583,7 +600,7 @@
   }
   .bg {
     z-index: 10;
-    background-image: url("/img/demo/camwithnkob/bg.png");
+    background-image: url("/img/demo/camwithnkob/bg.webp");
   }
   .bg-snap {
     z-index: 55; /* fades in over the white flash after a snap */
@@ -631,7 +648,7 @@
     position: fixed;
     inset: 0;
     z-index: 30;
-    background: #000 url("/img/demo/camwithnkob/bg.png") center / cover no-repeat;
+    background: #000 url("/img/demo/camwithnkob/bg.webp") center / cover no-repeat;
     display: flex;
     flex-direction: column;
     align-items: center;

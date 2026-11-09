@@ -224,7 +224,7 @@
     align-items: center;
     justify-content: center;
     gap: 20px;
-    background: #0f1117 url("/img/demo/camwithnkob/bg.png") center / cover no-repeat; /* same as the kiosk */
+    background: #0f1117 url("/img/demo/camwithnkob/bg.webp") center / cover no-repeat; /* same as the kiosk */
     color: #e1e4ea;
     font-family: system-ui, -apple-system, sans-serif;
     overflow: hidden;

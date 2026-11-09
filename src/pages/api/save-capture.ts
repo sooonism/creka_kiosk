@@ -23,6 +23,11 @@ export const POST: APIRoute = async ({ request, url }) => {
   const id = `${date}/${crypto.randomUUID()}`;
   await writeFile(path.join(CAPTURES_ROOT, kiosk ?? '', `${id}.png`), Buffer.from(match[1], 'base64'));
   // one json line per photo; lives in the persisted captures mount (so it is also served statically)
+  // small jpeg for the idle slideshow / recent strip, so they don't decode full pngs. Best effort.
+  try {
+    const { default: sharp } = await import('sharp');
+    await sharp(Buffer.from(match[1], 'base64')).resize(400).jpeg({ quality: 80 }).toFile(path.join(CAPTURES_ROOT, kiosk ?? '', `${id}.thumb.jpg`));
+  } catch {}
   await appendFile(path.join(CAPTURES_ROOT, 'index.jsonl'), JSON.stringify({ id, kiosk, ts: Date.now(), meta }) + '\n');
   // creka_backend keeps the registry/log: it stores its own copy and logs the link. Best effort, never fails the capture.
   // ponytail: dual-write while the photo page/QR still read the local copy; drop the local file once they use the backend link

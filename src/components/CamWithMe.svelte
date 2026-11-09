@@ -6,6 +6,8 @@
     onFacePosition,
     onFaceSize,
     onReady,
+    onStatus,
+    paint = true,
     debug = true,
     aspect = 0,
   }: {
@@ -13,6 +15,8 @@
     onFacePosition?: (normalizedX: number, bothSides: boolean) => void; // bothSides: faces on the left and the right half at once
     onFaceSize?: (normalizedWidth: number) => void; // face box width / frame width
     onReady?: (canvas: HTMLCanvasElement) => void;
+    onStatus?: (st: { camera: boolean; model: boolean }) => void; // camera stream live / face model loaded
+    paint?: boolean; // false: keep detecting but skip drawing the canvas (it is covered)
     debug?: boolean; // face boxes/keypoints + HUD overlays on the canvas
     aspect?: number; // w/h; crops the feed to this ratio and letterboxes it instead of cover-filling the screen (0 = off)
   } = $props();
@@ -90,6 +94,7 @@
         status = "Ready — looking for faces";
         lastVideoTime = -1;
         lastVideoChange = performance.now();
+        reportStatus();
         if (!loopStarted) {
           loopStarted = true;
           startDetectionLoop();
@@ -99,11 +104,14 @@
         error = e instanceof Error ? e.message : "Unknown error";
         status = `Retrying (${attempt + 1})...`;
         releaseCamera();
+        reportStatus();
         await sleep(Math.min(1000 * 2 ** attempt, 10000));
       }
     }
     starting = false;
   }
+
+  const reportStatus = () => onStatus?.({ camera: !!stream, model: !!faceDetectorInstance });
 
   // track ended (unplug/power save) or video frozen -> tear down and restart
   function checkHealth() {
@@ -118,6 +126,7 @@
       status = "Camera lost — restarting...";
       onFaceCount?.(0); // don't leave a stale "face present" while the feed is down
       releaseCamera();
+      reportStatus();
       start();
     }
   }
@@ -213,7 +222,7 @@
         }
 
         // Single canvas: mirrored video + bbox/keypoints + HUD
-        drawFrame(lastResult);
+        if (paint) drawFrame(lastResult);
 
         frameCount++;
         if (now - lastFpsUpdate > 1000) {
