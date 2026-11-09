@@ -159,7 +159,8 @@
   // detection lives in public/mediapipe/face-worker.js; resolves once the model is loaded
   function initMediaPipe() {
     status = "Loading face model...";
-    const w = new Worker("/mediapipe/face-worker.js");
+    // bump ?v= when the worker changes: the host caches /mediapipe/* for 4 h
+    const w = new Worker("/mediapipe/face-worker.js?v=2");
     return new Promise<void>((resolve, reject) => {
       w.onmessage = ({ data }) => {
         if (data.type === "ready") {
