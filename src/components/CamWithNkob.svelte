@@ -453,6 +453,8 @@
   <CamWithMe
     debug={false}
     aspect={1}
+    detectMs={1000}
+    lowPower={stage === "idle" && mode !== "debug"}
     paint={stage === "reveal" || stage === "countdown" || stage === "snapped" || mode === "debug"}
     onFaceCount={(count) => (faceDetected = count > 0)}
     onFacePosition={(x, both) => {

@@ -8,6 +8,8 @@
     onReady,
     onStatus,
     paint = true,
+    lowPower = false,
+    detectMs = 100,
     debug = true,
     aspect = 0,
   }: {
@@ -16,6 +18,8 @@
     onFaceSize?: (normalizedWidth: number) => void; // face box width / frame width
     onReady?: (canvas: HTMLCanvasElement) => void;
     onStatus?: (st: { camera: boolean; model: boolean }) => void; // camera stream live / face model loaded
+    detectMs?: number; // how often a frame goes to the face worker
+    lowPower?: boolean; // idle: ask the camera for 5 fps so the Pi isn't decoding 30 fps video nobody sees
     paint?: boolean; // false: keep detecting but skip drawing the canvas (it is covered)
     debug?: boolean; // face boxes/keypoints + HUD overlays on the canvas
     aspect?: number; // w/h; crops the feed to this ratio and letterboxes it instead of cover-filling the screen (0 = off)
@@ -39,7 +43,10 @@
   let lastFpsUpdate = 0;
 
   // MediaPipe
-  let faceDetectorInstance: any;
+  let worker: Worker | null = null;
+  let modelReady = false;
+  let misses = 0; // consecutive empty results
+  let busy = false; // a frame is out at the worker; skip rather than queue
   let running = true;
 
   // vendored in public/mediapipe/ (copied from node_modules/@mediapipe/tasks-vision/wasm) so the kiosk doesn't need the network
@@ -52,7 +59,7 @@
   let watchdog: any;
   let lastVideoTime = -1;
   let lastVideoChange = 0;
-  const DETECT_MS = 100; // ~10 detections/s is plenty for presence + position
+  const DETECT_W = 320; // frames are shrunk to this width before they cross to the worker (the model sees 128px anyway)
   let lastDetect = 0;
   let lastResult: any = {};
 
@@ -68,7 +75,7 @@
     running = false;
     clearInterval(watchdog);
     releaseCamera();
-    if (faceDetectorInstance) faceDetectorInstance.close();
+    worker?.terminate();
   });
 
   function releaseCamera() {
@@ -88,7 +95,7 @@
     for (let attempt = 0; running; attempt++) {
       try {
         await initCamera();
-        if (!faceDetectorInstance) await initMediaPipe();
+        if (!worker) await initMediaPipe();
         if (!running) break;
         error = null;
         status = "Ready — looking for faces";
@@ -111,7 +118,14 @@
     starting = false;
   }
 
-  const reportStatus = () => onStatus?.({ camera: !!stream, model: !!faceDetectorInstance });
+  const applyFps = () =>
+    stream?.getVideoTracks()[0]?.applyConstraints({ frameRate: { ideal: lowPower ? 5 : 30 } }).catch(() => {});
+  $effect(() => {
+    lowPower; // re-run on change
+    applyFps();
+  });
+
+  const reportStatus = () => onStatus?.({ camera: !!stream, model: modelReady });
 
   // track ended (unplug/power save) or video frozen -> tear down and restart
   function checkHealth() {
@@ -131,23 +145,79 @@
     }
   }
 
-  async function initMediaPipe() {
-    const { FilesetResolver, FaceDetector } = await import(
-      "@mediapipe/tasks-vision"
-    );
+  // detection lives in public/mediapipe/face-worker.js; resolves once the model is loaded
+  function initMediaPipe() {
     status = "Loading face model...";
-    const vision = await FilesetResolver.forVisionTasks(WASM_URL);
+    const w = new Worker("/mediapipe/face-worker.js");
+    return new Promise<void>((resolve, reject) => {
+      w.onmessage = ({ data }) => {
+        if (data.type === "ready") {
+          worker = w;
+          modelReady = true;
+          reportStatus();
+          resolve();
+        } else if (data.type === "result") {
+          busy = false;
+          onResult(data);
+        } else {
+          busy = false;
+          if (!worker) {
+            w.terminate();
+            reject(new Error(data.message));
+          } else console.error("face worker", data.message);
+        }
+      };
+      w.onerror = (e) => {
+        if (!worker) {
+          w.terminate();
+          reject(new Error(e.message || "face worker failed"));
+        }
+      };
+    });
+  }
 
-    const create = (delegate: "GPU" | "CPU") =>
-      FaceDetector.createFromOptions(vision, {
-        baseOptions: { modelAssetPath: MODEL_URL, delegate },
-        runningMode: "VIDEO",
-        minDetectionConfidence: 0.5,
-      });
+  // worker result -> same callbacks as before. Boxes arrive in the shrunk frame; scale them to the canvas
+  function onResult({ w, detections }: { w: number; detections: any[] }) {
+    const k = canvas.width / w;
+    lastResult = {
+      detections: detections.map((d) => ({
+        ...d,
+        boundingBox: d.boundingBox && {
+          originX: d.boundingBox.originX * k,
+          originY: d.boundingBox.originY * k,
+          width: d.boundingBox.width * k,
+          height: d.boundingBox.height * k,
+        },
+      })),
+    };
+    // at ~1 sample/s one empty result (a blink, a head turn) mustn't read as "left": needs two in a row
+    misses = detections.length ? 0 : misses + 1;
+    if (detections.length || misses >= (detectMs >= 500 ? 2 : 1)) {
+      faceCount = detections.length;
+      onFaceCount?.(faceCount);
+    }
+    const box = detections[0]?.boundingBox;
+    if (box) {
+      // mirrored on screen, so flip the center before normalizing
+      const xs = detections.map((d) => 1 - (d.boundingBox.originX + d.boundingBox.width / 2) / w);
+      onFacePosition?.(xs[0], xs.some((x) => x < 0.5) && xs.some((x) => x > 0.5));
+      onFaceSize?.(box.width / w);
+    }
+  }
+
+  // crop + shrink the current frame and hand it to the worker (the bitmap is transferred, not copied)
+  async function sendFrame() {
+    if (!video || !worker) return;
+    busy = true;
     try {
-      faceDetectorInstance = await create("GPU");
-    } catch {
-      faceDetectorInstance = await create("CPU"); // GPU delegate unavailable
+      const bmp = await createImageBitmap(video, crop.x, crop.y, crop.w, crop.h, {
+        resizeWidth: DETECT_W,
+        resizeHeight: Math.round((DETECT_W * crop.h) / crop.w),
+      });
+      worker.postMessage({ bmp }, [bmp]);
+    } catch (e) {
+      busy = false;
+      console.error("send frame failed", e);
     }
   }
 
@@ -171,6 +241,7 @@
     video.autoplay = true;
     await video.play();
 
+    applyFps(); // a restarted camera starts at full rate
     // Sync canvas dimensions
     setCanvasSize();
   }
@@ -201,24 +272,13 @@
       animId = requestAnimationFrame(detect); // scheduled first so a throw below can't kill the loop
 
       try {
-        if (!faceDetectorInstance || !video || video.readyState < 2) return;
+        if (!worker || !video || video.readyState < 2) return;
         const now = performance.now();
 
-        // detection is the slow part: run it throttled, but paint the video every frame
-        if (now - lastDetect >= DETECT_MS) {
+        // detection runs in the worker; here we only post a frame every detectMs
+        if (!busy && now - lastDetect >= detectMs) {
           lastDetect = now;
-          lastResult = faceDetectorInstance.detectForVideo(video, now);
-          faceCount = lastResult.detections?.length ?? 0;
-          onFaceCount?.(faceCount);
-
-          const box = lastResult.detections?.[0]?.boundingBox;
-          if (box && canvas.width) {
-            // mirrored on screen, so flip the raw center before normalizing
-            const mirroredCenterX = crop.w - (box.originX + box.width / 2 - crop.x);
-            const xs = lastResult.detections.map((d: any) => (crop.w - (d.boundingBox.originX + d.boundingBox.width / 2 - crop.x)) / crop.w);
-            onFacePosition?.(mirroredCenterX / crop.w, xs.some((x: number) => x < 0.5) && xs.some((x: number) => x > 0.5));
-            onFaceSize?.(box.width / crop.w);
-          }
+          sendFrame();
         }
 
         // Single canvas: mirrored video + bbox/keypoints + HUD

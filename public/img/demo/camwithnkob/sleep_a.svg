@@ -18,7 +18,7 @@
 }
 #Group_14 {
   transform-origin: 0 0;
-  animation: kf_Group_14_transform_0 3s linear infinite;
+  animation: kf_Group_14_transform_0 3s linear 4; /* 4 bobs then rests: it is on screen all night */
 }
 </style>
 <g id="Frame_1" clip-path="url(#clip0_6_385)">
