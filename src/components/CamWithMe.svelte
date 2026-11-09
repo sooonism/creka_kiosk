@@ -8,6 +8,8 @@
     onReady,
     onStatus,
     paint = true,
+    live = false,
+    onVideo,
     lowPower = false,
     detectMs = 100,
     debug = true,
@@ -20,12 +22,15 @@
     onStatus?: (st: { camera: boolean; model: boolean }) => void; // camera stream live / face model loaded
     detectMs?: number; // how often a frame goes to the face worker
     lowPower?: boolean; // idle: ask the camera for 5 fps so the Pi isn't decoding 30 fps video nobody sees
+    live?: boolean; // show the camera as the <video> itself (1080p, GPU/compositor path) instead of copying frames onto the canvas
+    onVideo?: (video: HTMLVideoElement) => void; // live only: the element to grab full-res frames from
     paint?: boolean; // false: keep detecting but skip drawing the canvas (it is covered)
     debug?: boolean; // face boxes/keypoints + HUD overlays on the canvas
     aspect?: number; // w/h; crops the feed to this ratio and letterboxes it instead of cover-filling the screen (0 = off)
   } = $props();
 
   let canvas: HTMLCanvasElement;
+  let host: HTMLDivElement; // live: where the <video> is mounted
   let status = $state("Initializing camera...");
   let faceCount = $state(0);
   let fps = $state(0);
@@ -124,6 +129,11 @@
   $effect(() => {
     lowPower; // re-run on change
     applyFps();
+  });
+
+  // live: hidden (not removed) while covered, so the Pi doesn't composite 1080p video nobody can see
+  $effect(() => {
+    if (host) host.style.visibility = paint ? "visible" : "hidden";
   });
 
   const reportStatus = () => onStatus?.({ camera: !!stream, model: modelReady });
@@ -226,8 +236,8 @@
     status = "Opening camera...";
     stream = await navigator.mediaDevices.getUserMedia({
       video: {
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
+        width: { ideal: live ? 1920 : 1280 }, // live: the photo is cropped from this, so ask for the camera's best
+        height: { ideal: live ? 1080 : 720 },
         facingMode: "user",
       },
       audio: false,
@@ -240,6 +250,13 @@
     video.playsInline = true;
     video.muted = true;
     video.autoplay = true;
+    if (live) {
+      // the live view is this element: square box, cover-cropped, mirrored by CSS (no per-frame canvas copy)
+      const box = aspect ? `width:min(100vw - 40px, (100vh - 40px) * ${aspect});aspect-ratio:${aspect};top:50%;left:50%;transform:translate(-50%,-50%) scaleX(-1)` : "inset:0;width:100%;height:100%;transform:scaleX(-1)";
+      video.style.cssText = `position:absolute;object-fit:cover;${box}`;
+      host.replaceChildren(video);
+      onVideo?.(video);
+    }
     await video.play();
 
     applyFps(); // a restarted camera starts at full rate
@@ -284,7 +301,8 @@
 
         // Single canvas: mirrored video + bbox/keypoints + HUD. Paint only when the camera delivered a new frame
         // (the screen refreshes at 60 Hz, the camera at ~30), so the main thread isn't redrawing identical pixels
-        if (!paint) lastPaintT = -1;
+        if (live) frameCount++;
+        else if (!paint) lastPaintT = -1;
         else if (video.currentTime !== lastPaintT) {
           lastPaintT = video.currentTime;
           drawFrame(lastResult);
@@ -433,7 +451,8 @@
 
 <div class="cam-container">
   <!-- Only the canvas renders — video lives in JS memory, never in the DOM -->
-  <canvas bind:this={canvas} class="cam-canvas" class:fixed={!!aspect} style:--aspect={aspect || null}></canvas>
+  <div bind:this={host}></div>
+  <canvas bind:this={canvas} class="cam-canvas" class:fixed={!!aspect} style:--aspect={aspect || null} style:display={live ? "none" : null}></canvas>
 
   {#if error}
     <div class="overlay error">

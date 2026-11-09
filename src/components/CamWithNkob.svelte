@@ -15,7 +15,7 @@
     waking: "/img/demo/camwithnkob/wakeup_a.svg",
     greet: "/img/demo/camwithnkob/greet.png",
   };
-  let camCanvas: HTMLCanvasElement | null = null;
+  let camVideo: HTMLVideoElement | null = null; // the live <video>; snaps are cut from it at full camera resolution
   let camStatus = { camera: false, model: false };
   let nkobEl: HTMLImageElement;
   let previewCanvas: HTMLCanvasElement;
@@ -288,21 +288,26 @@
   // Canvas #2: composite (cam feed + nkob) drawn once per snap. Not per frame:
   // measuring nkob below forces layout and resets its CSS transition.
   function drawPreview() {
-    if (!camCanvas || !previewCanvas || !nkobEl) return;
+    if (!camVideo || !previewCanvas || !nkobEl) return;
     const ctx = previewCanvas.getContext("2d");
     if (!ctx) return;
-
-    if (previewCanvas.width !== camCanvas.width || previewCanvas.height !== camCanvas.height) {
-      previewCanvas.width = camCanvas.width;
-      previewCanvas.height = camCanvas.height;
+    // centre square of the camera frame (what the live view shows), mirrored like the live view, at full resolution
+    const { videoWidth: vw, videoHeight: vh } = camVideo;
+    const side = Math.min(vw, vh);
+    if (!side) return;
+    if (previewCanvas.width !== side || previewCanvas.height !== side) {
+      previewCanvas.width = side;
+      previewCanvas.height = side;
     }
+    ctx.save();
+    ctx.scale(-1, 1);
+    ctx.drawImage(camVideo, (vw - side) / 2, (vh - side) / 2, side, side, -side, 0, side, side);
+    ctx.restore();
 
-    ctx.drawImage(camCanvas, 0, 0);
-
-    const camRect = camCanvas.getBoundingClientRect();
+    const camRect = camVideo.getBoundingClientRect();
     if (!camRect.width || !camRect.height) return;
-    // camCanvas renders with object-fit:cover, so its on-screen box and its
-    // internal buffer can have different aspect ratios — map between them with
+    // the cam box renders with object-fit:cover, so its on-screen box and the
+    // frame buffer can have different aspect ratios — map between them with
     // a single uniform "cover" scale, not independent X/Y factors (that stretched nkob)
     const coverScale = Math.max(
       previewCanvas.width / camRect.width,
@@ -469,7 +474,8 @@
       if (!both) faceOnRight = x > 0.5; // people on both sides: stay on the current side
     }}
     {onFaceSize}
-    onReady={(canvas) => (camCanvas = canvas)}
+    live
+    onVideo={(v) => (camVideo = v)}
     onStatus={(st) => (camStatus = st)}
   />
   <div class="slot">
