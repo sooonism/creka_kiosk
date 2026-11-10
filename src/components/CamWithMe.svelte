@@ -11,6 +11,7 @@
     live = false,
     onVideo,
     lowPower = false,
+    sharpness,
     detectMs = 100,
     debug = true,
     aspect = 0,
@@ -21,6 +22,7 @@
     onReady?: (canvas: HTMLCanvasElement) => void;
     onStatus?: (st: { camera: boolean; model: boolean }) => void; // camera stream live / face model loaded
     detectMs?: number; // how often a frame goes to the face worker
+    sharpness?: number; // camera's own sharpening (UVC 0-31 on the Pi's cam); left alone when undefined
     lowPower?: boolean; // idle: ask the camera for 5 fps so the Pi isn't decoding 30 fps video nobody sees
     live?: boolean; // show the camera as the <video> itself (1080p, GPU/compositor path) instead of copying frames onto the canvas
     onVideo?: (video: HTMLVideoElement) => void; // live only: the element to grab full-res frames from
@@ -124,11 +126,16 @@
     starting = false;
   }
 
-  const applyFps = () =>
-    stream?.getVideoTracks()[0]?.applyConstraints({ frameRate: { ideal: lowPower ? 5 : 30 } }).catch(() => {});
+  // one call for both: applyConstraints replaces the previous set, so separate calls would undo each other
+  const applyTrack = () =>
+    stream
+      ?.getVideoTracks()[0]
+      ?.applyConstraints({ frameRate: { ideal: lowPower ? 5 : 30 }, ...(sharpness == null ? {} : { advanced: [{ sharpness } as any] }) })
+      .catch(() => {});
   $effect(() => {
     lowPower; // re-run on change
-    applyFps();
+    sharpness;
+    applyTrack();
   });
 
   // live: hidden (not removed) while covered, so the Pi doesn't composite 1080p video nobody can see
@@ -260,7 +267,7 @@
     }
     await video.play();
 
-    applyFps(); // a restarted camera starts at full rate
+    applyTrack(); // a restarted camera starts at full rate and default sharpness
     // Sync canvas dimensions
     setCanvasSize();
   }

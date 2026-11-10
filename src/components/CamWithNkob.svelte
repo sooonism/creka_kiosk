@@ -85,6 +85,7 @@
     mouseTimer = setTimeout(() => (mouseIdle = true), 2000);
   }
   let countdownY = $state(15); // vh from the top
+  let sharpness = $state(12); // camera sharpening 0-31; the Pi's cam ships at 2, which is very soft
   // decode every image the flow shows up front, so the first reveal/greet doesn't hitch on a cold decode
   const warm: HTMLImageElement[] = [];
   onMount(() => {
@@ -98,6 +99,7 @@
   onMount(() => {
     onMouseMove(); // start the 2s hide timer even if the mouse never moves
     countdownY = Number(localStorage.getItem("nkob-countdown-y") ?? countdownY);
+    sharpness = Number(localStorage.getItem("nkob-sharpness") ?? sharpness);
     savedPoses = JSON.parse(localStorage.getItem("nkob-poses") ?? "[]");
   });
   // backend link (creka_backend `kiosk:<id>` channel): pushes UI state for the remote, applies its commands,
@@ -173,6 +175,9 @@
   });
   $effect(() => {
     localStorage.setItem("nkob-countdown-y", String(countdownY));
+  });
+  $effect(() => {
+    localStorage.setItem("nkob-sharpness", String(sharpness));
   });
   // idle: fade past polaroids in and out, 3 random ones at the bottom and 3 more along the top, each tilted a bit
   // captures from before thumbnails existed only have the full png
@@ -468,6 +473,7 @@
     aspect={1}
     detectMs={stage === "idle" ? 250 : 500}
     lowPower={stage === "idle" && mode !== "debug"}
+    {sharpness}
     paint={stage === "reveal" || stage === "countdown" || stage === "snapped" || mode === "debug"}
     onFaceCount={(count) => (faceDetected = count > 0)}
     onFacePosition={(x, both) => {
@@ -545,6 +551,11 @@
   {/each}
   <h4>Face</h4>
   <small>{faceDetected ? `${faceW.toFixed(2)}` : "no face"}</small>
+  <h4>Camera</h4>
+  <label class="slider">
+    <span>sharpness {sharpness}</span>
+    <input type="range" min="0" max="31" step="1" bind:value={sharpness} />
+  </label>
   <h4>Countdown</h4>
   <label class="slider">
     <span>y {countdownY}vh</span>
