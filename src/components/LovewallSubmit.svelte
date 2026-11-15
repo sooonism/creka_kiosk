@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import '../styles/lovewall.css';
+  import LovewallConfetti from './LovewallConfetti.svelte';
   import { accentStyle, loadFonts, type Look } from '../lib/lovewall-theme';
 
   let { slug }: { slug: string } = $props();
@@ -100,6 +101,7 @@
 <!-- the page stays blank until the look arrives, so a wedding never flashes the default dark theme -->
 {#if look}
   <div class="lw lw-guest" data-theme={look.template} style={accentStyle(look.accent)}>
+    {#if look.template === 'festive'}<LovewallConfetti />{/if}
     <main class="lw-page">
       <header class="lw-head">
         {#if look.logo_path}<img class="lw-logo" src={MEDIA + look.logo_path} alt="" />{/if}

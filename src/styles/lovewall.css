@@ -115,6 +115,7 @@ textarea.lw-field { resize: vertical; min-height: 120px; line-height: 1.4; }
 .lw-wall .lw-title { font-size: calc(var(--u) * 4.6); line-height: 1.05; font-weight: 800; }
 .lw-wall .lw-sub { font-size: calc(var(--u) * 2.2); margin-top: calc(var(--u) * 0.5); }
 
+.lw-wall .lw-head, .lw-body, .lw-page { position: relative; z-index: 1; }
 .lw-body { flex: 1; min-height: 0; display: flex; align-items: stretch; }
 /* three columns, rows capped so a short wall shows tidy cards rather than tall empty columns */
 .lw-grid {
@@ -139,7 +140,7 @@ textarea.lw-field { resize: vertical; min-height: 120px; line-height: 1.4; }
 }
 .lw-qr img { display: block; width: calc(var(--u) * 17); height: auto; margin-bottom: calc(var(--u) * 0.6); }
 
-.lw-spot { position: absolute; inset: 0; display: grid; place-items: center; animation: lw-fade 0.5s ease; }
+.lw-spot { position: absolute; z-index: 3; inset: 0; display: grid; place-items: center; animation: lw-fade 0.5s ease; }
 .lw-spot.video { background: #000; }
 .lw-spot video { width: 100%; height: 100%; object-fit: contain; }
 .lw-cap { position: absolute; inset: auto 0 0 0; padding: calc(var(--u) * 4); font-size: calc(var(--u) * 3.2); color: #fff; background: linear-gradient(transparent, rgb(0 0 0 / 0.78)); }
@@ -210,8 +211,8 @@ textarea.lw-field { resize: vertical; min-height: 120px; line-height: 1.4; }
 
 /* ───────────── festive (confetti) ───────────── */
 
-.lw[data-theme='festive'] {
-  background-color: var(--bg);
+.lw[data-theme='festive'] { background-color: var(--bg); }
+.lw-wall.mini[data-theme='festive'] {
   background-image:
     radial-gradient(circle at 8% 14%, #ff5a3c 0 0.7vmin, transparent 0.8vmin),
     radial-gradient(circle at 92% 22%, #7fd8be 0 0.9vmin, transparent 1vmin),
@@ -257,3 +258,16 @@ html:has(.lw[data-theme='classic']) { background: #0f1117; }
 html:has(.lw[data-theme='corporate']) { background: #eef0f4; }
 html:has(.lw[data-theme='elegant']) { background: #12100e; }
 html:has(.lw[data-theme='festive']) { background: #fff3dc; }
+
+/* festive: falling confetti behind the content */
+.lw-confetti { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.lw-confetti i {
+  position: absolute; top: 0; width: calc(var(--s) * 1.1vmin); height: calc(var(--s) * 0.55vmin); min-width: 6px; min-height: 3px;
+  border-radius: 1px; opacity: 0.9; will-change: transform; animation: lw-fall linear infinite;
+}
+.lw-confetti i.round { height: calc(var(--s) * 0.9vmin); min-height: 5px; border-radius: 50%; }
+@keyframes lw-fall {
+  from { transform: translate3d(0, -8vh, 0) rotate(0deg); }
+  to { transform: translate3d(var(--dx), 108vh, 0) rotate(var(--r)); }
+}
+@media (prefers-reduced-motion: reduce) { .lw-confetti { display: none; } }
