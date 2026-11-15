@@ -30,6 +30,8 @@
   let poll: ReturnType<typeof setInterval>;
   let wake: any = null;
   let alive = true;
+  let wantFs = $state(false); // the organiser asked for fullscreen: waiting for a tap on this screen
+  let lastCmd: number | null = null;
 
   const url = (p: string | null) => (p ? MEDIA + p : '');
 
@@ -43,12 +45,37 @@
         look = j.settings;
         loadFonts(look?.template);
       }
+      obey(j.settings.fullscreen_at, j.settings.fullscreen);
       maxVideo = j.settings.max_video_s;
       items = j.data;
     } catch {
       /* offline: keep playing what we have, next poll retries */
     }
   }
+
+  // The organiser's fullscreen button. Leaving fullscreen needs no permission; entering does (a tap on this screen),
+  // so "on" raises a prompt instead. The first load only records the stamp, so a reload never replays an old command.
+  function obey(at: number, want: boolean) {
+    if (lastCmd !== null && at !== lastCmd) {
+      if (!want) {
+        wantFs = false;
+        if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+      } else if (!document.fullscreenElement) wantFs = started;
+    }
+    lastCmd = at;
+    report();
+  }
+  // tell the organiser page what the browser is really doing
+  const report = () =>
+    fetch(`/api/lovewall/${slug}/wall/state`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fullscreen: !!document.fullscreenElement }) }).catch(() => {});
+  function goFullscreen() {
+    wantFs = false;
+    document.documentElement.requestFullscreen().catch(() => {});
+  }
+  const fsChange = () => {
+    if (document.fullscreenElement) wantFs = false;
+    report();
+  };
 
   // oldest-featured first, pinned and newest breaking ties
   function next(): Msg | null {
@@ -115,15 +142,11 @@
     wake?.release?.();
   });
 
-  // browsers only allow entering fullscreen from a click on this screen, so the organiser's switch can only take it back out
-  $effect(() => {
-    if (look?.fullscreen === false && document.fullscreenElement) document.exitFullscreen().catch(() => {});
-  });
-
   const grid = $derived(items.filter((m) => m.id !== featured?.id).slice(0, GRID));
 </script>
 
 <svelte:window onkeydown={key} />
+<svelte:document onfullscreenchange={fsChange} />
 
 <!-- blank until the look arrives, so the wall never flashes the wrong template -->
 {#if look}
@@ -176,6 +199,10 @@
         {/if}
       </div>
     {/key}
+  {/if}
+
+  {#if wantFs}
+    <button class="lw-fs-prompt" onclick={goFullscreen}><span>Tap anywhere to go fullscreen</span></button>
   {/if}
 
   {#if !started}

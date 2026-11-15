@@ -26,6 +26,8 @@
   let items = $state<Msg[]>([]);
   let counts = $state<Record<string, number>>({});
   let settings = $state<any>(null);
+  let wall = $state({ connected: false, fullscreen: false }); // what the open wall screen is really doing, reported by the wall itself
+  let fsAsked = $state(false);
   let blocklist = $state('');
   let titleDraft = $state('');
   let subtitleDraft = $state('');
@@ -68,6 +70,8 @@
     const j = await res.json();
     items = j.data;
     counts = j.counts;
+    wall = j.wall;
+    if (wall.fullscreen || !wall.connected) fsAsked = false;
     if (!settings) {
       settings = j.settings;
       blocklist = j.settings.blocklist.join(', ');
@@ -96,6 +100,15 @@
   }
 
   // multipart, so no JSON content-type: the browser has to set the boundary itself
+  // Fullscreen is the wall browser's call, so this sends a command (a fresh stamp) and the button follows what the wall reports back
+  function toggleFullscreen() {
+    const want = !wall.fullscreen;
+    fsAsked = want;
+    save({ fullscreen: want, fullscreen_at: Date.now() });
+    setTimeout(refresh, 3500);
+    setTimeout(() => (fsAsked = false), 60_000); // give up waiting if nobody taps the wall
+  }
+
   async function uploadLogo(e: Event) {
     const input = e.target as HTMLInputElement;
     const f = input.files?.[0];
@@ -208,14 +221,16 @@
         </div>
 
         <div class="toggles">
-          <label class="row">
-            <input type="checkbox" checked={settings.fullscreen} onchange={(e) => save({ fullscreen: (e.target as HTMLInputElement).checked })} />
-            Wall goes fullscreen when started
-          </label>
-          <label class="row">
-            <input type="checkbox" checked={settings.show_qr} onchange={(e) => save({ show_qr: (e.target as HTMLInputElement).checked })} />
-            Show the QR code on the wall
-          </label>
+          <button class="tgl" aria-pressed={wall.fullscreen} disabled={!wall.connected} onclick={toggleFullscreen}>
+            <span class="track"><span class="knob"></span></span>
+            <span class="tl">Wall fullscreen
+              <small>{!wall.connected ? 'Wall is not open' : fsAsked ? 'Waiting for a tap on the wall screen' : wall.fullscreen ? 'On' : 'Off'}</small>
+            </span>
+          </button>
+          <button class="tgl" aria-pressed={settings.show_qr} onclick={() => save({ show_qr: !settings.show_qr })}>
+            <span class="track"><span class="knob"></span></span>
+            <span class="tl">QR code on the wall <small>{settings.show_qr ? 'Shown' : 'Hidden'}</small></span>
+          </button>
         </div>
 
         <div class="fields">
@@ -530,20 +545,58 @@
   }
   .toggles {
     display: flex;
-    gap: 8px 28px;
+    gap: 10px;
     flex-wrap: wrap;
     margin-bottom: 16px;
-    font-size: 14px;
   }
-  .toggles .row {
-    flex-direction: row;
+  .tgl {
+    display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 12px;
+    text-align: left;
+    background: #1a1d27;
+    border: 1px solid #2c3040;
+    border-radius: 10px;
+    padding: 10px 14px;
+    min-width: 230px;
+  }
+  .tgl:disabled {
+    opacity: 0.55;
+    cursor: default;
+  }
+  .tgl .tl {
+    display: flex;
+    flex-direction: column;
     font-size: 14px;
   }
-  .toggles input {
-    width: 18px;
-    height: 18px;
+  .tgl small {
+    opacity: 0.7;
+    font-size: 12.5px;
+  }
+  .track {
+    flex: none;
+    width: 38px;
+    height: 22px;
+    border-radius: 11px;
+    background: #3a4055;
+    position: relative;
+    transition: background 0.2s;
+  }
+  .knob {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #e1e4ea;
+    transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .tgl[aria-pressed='true'] .track {
+    background: #1f8a5b;
+  }
+  .tgl[aria-pressed='true'] .knob {
+    transform: translateX(16px);
   }
   .fields {
     display: grid;
