@@ -207,6 +207,17 @@
           {/each}
         </div>
 
+        <div class="toggles">
+          <label class="row">
+            <input type="checkbox" checked={settings.fullscreen} onchange={(e) => save({ fullscreen: (e.target as HTMLInputElement).checked })} />
+            Wall goes fullscreen when started
+          </label>
+          <label class="row">
+            <input type="checkbox" checked={settings.show_qr} onchange={(e) => save({ show_qr: (e.target as HTMLInputElement).checked })} />
+            Show the QR code on the wall
+          </label>
+        </div>
+
         <div class="fields">
           <label>
             Event title
@@ -516,6 +527,23 @@
   .tfor {
     font-size: 12.5px;
     opacity: 0.65;
+  }
+  .toggles {
+    display: flex;
+    gap: 8px 28px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    font-size: 14px;
+  }
+  .toggles .row {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+  }
+  .toggles input {
+    width: 18px;
+    height: 18px;
   }
   .fields {
     display: grid;

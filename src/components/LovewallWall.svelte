@@ -76,7 +76,8 @@
   // the Start click is the user gesture that lets videos play with sound
   async function start() {
     started = true;
-    try { await document.documentElement.requestFullscreen(); } catch {}
+    // the organiser can turn this off (e.g. a wall running inside a kiosk browser that is already fullscreen)
+    if (look?.fullscreen !== false) try { await document.documentElement.requestFullscreen(); } catch {}
     lock();
     advance();
   }
@@ -114,6 +115,11 @@
     wake?.release?.();
   });
 
+  // browsers only allow entering fullscreen from a click on this screen, so the organiser's switch can only take it back out
+  $effect(() => {
+    if (look?.fullscreen === false && document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  });
+
   const grid = $derived(items.filter((m) => m.id !== featured?.id).slice(0, GRID));
 </script>
 
@@ -142,10 +148,12 @@
       </div>
     {/each}
   </div>
-  <aside class="lw-qr">
-    <img src={qr} alt="Scan to send a message" />
-    <span>Send us a message</span>
-  </aside>
+  {#if look.show_qr !== false}
+    <aside class="lw-qr">
+      <img src={qr} alt="Scan to send a message" />
+      <span>Send us a message</span>
+    </aside>
+  {/if}
   </div>
 
   {#if !items.length}
