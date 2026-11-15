@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import '../styles/lovewall.css';
+  import { TEMPLATES, SWATCHES, accentStyle, loadFonts, template } from '../lib/lovewall-theme';
 
   let { slug }: { slug: string } = $props();
 
@@ -25,6 +27,10 @@
   let counts = $state<Record<string, number>>({});
   let settings = $state<any>(null);
   let blocklist = $state('');
+  let titleDraft = $state('');
+  let subtitleDraft = $state('');
+  let saved = $state('');
+  let savedTimer: ReturnType<typeof setTimeout>;
   let error = $state('');
   let poll: ReturnType<typeof setInterval>;
 
@@ -65,6 +71,9 @@
     if (!settings) {
       settings = j.settings;
       blocklist = j.settings.blocklist.join(', ');
+      titleDraft = j.settings.title;
+      subtitleDraft = j.settings.subtitle;
+      TEMPLATES.forEach((t) => loadFonts(t.id)); // the picker previews every template
     }
   }
 
@@ -78,8 +87,31 @@
 
   async function save(patch: Record<string, unknown>) {
     const res = await api(`${slug}/settings`, { method: 'PATCH', body: JSON.stringify(patch) });
+    if (res.ok) {
+      settings = (await res.json()).settings;
+      saved = 'Saved';
+      clearTimeout(savedTimer);
+      savedTimer = setTimeout(() => (saved = ''), 2000);
+    } else error = res.status === 422 ? 'That value is not allowed.' : 'Could not save settings.';
+  }
+
+  // multipart, so no JSON content-type: the browser has to set the boundary itself
+  async function uploadLogo(e: Event) {
+    const input = e.target as HTMLInputElement;
+    const f = input.files?.[0];
+    if (!f) return;
+    error = '';
+    const fd = new FormData();
+    fd.set('file', f);
+    const res = await fetch(`/api/lovewall/${slug}/logo`, { method: 'POST', headers: { 'x-organiser-token': token }, body: fd });
+    const j = await res.json().catch(() => ({}));
+    if (res.ok) settings = j.settings;
+    else error = j.message ?? 'Could not upload the logo.';
+    input.value = '';
+  }
+  async function removeLogo() {
+    const res = await fetch(`/api/lovewall/${slug}/logo`, { method: 'POST', headers: { 'x-organiser-token': token } });
     if (res.ok) settings = (await res.json()).settings;
-    else error = 'Could not save settings.';
   }
 
   async function clearWall() {
@@ -115,6 +147,8 @@
     const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
     return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : `${Math.round(m / 60)} h ago`;
   };
+  const SAMPLES = ['What a night. Congratulations to you both!', 'Best party we have been to all year.', 'Thank you for having us.'];
+  const tile = $derived(accentStyle(settings?.accent));
   const texts = $derived(items.filter((m) => m.kind !== 'video').map((m) => m.id));
 </script>
 
@@ -143,6 +177,77 @@
         <button class="ghost" onclick={logout}>Sign out</button>
       </div>
     </header>
+
+    {#if settings}
+      <section class="look" aria-labelledby="look-h">
+        <div class="look-top">
+          <h2 id="look-h">Look</h2>
+          <span class="saved" role="status">{saved}</span>
+        </div>
+        <p class="muted">One template styles the guest page and the wall. Changes appear on the wall within a few seconds.</p>
+
+        <div class="tiles" role="radiogroup" aria-label="Template">
+          {#each TEMPLATES as t}
+            <button class="tile" role="radio" aria-checked={settings.template === t.id} class:on={settings.template === t.id} onclick={() => save({ template: t.id })}>
+              <div class="lw lw-wall mini" data-theme={t.id} style="--u:1.7px;{tile}" aria-hidden="true">
+                <div class="lw-head">
+                  <div class="lw-titles">
+                    <div class="lw-title">{titleDraft || 'Your event'}</div>
+                    {#if subtitleDraft}<div class="lw-sub">{subtitleDraft}</div>{/if}
+                  </div>
+                  <div class="lw-orn"><i></i></div>
+                </div>
+                <div class="lw-grid">
+                  {#each SAMPLES as txt}<div class="lw-card"><p>{txt}</p><span class="lw-by">A guest</span></div>{/each}
+                </div>
+              </div>
+              <span class="tname">{t.name}</span>
+              <span class="tfor">{t.for}</span>
+            </button>
+          {/each}
+        </div>
+
+        <div class="fields">
+          <label>
+            Event title
+            <input maxlength="80" placeholder="e.g. Sarah &amp; Daniel · or · Acme Summit 2026" bind:value={titleDraft} onchange={() => save({ title: titleDraft.trim() })} />
+          </label>
+          <label>
+            Subtitle
+            <input maxlength="140" placeholder="e.g. 14 June · Cameron Highlands" bind:value={subtitleDraft} onchange={() => save({ subtitle: subtitleDraft.trim() })} />
+          </label>
+
+          <div class="accent">
+            <span id="accent-l">Accent colour</span>
+            <div class="swatches" role="group" aria-labelledby="accent-l">
+              <button class="sw def" class:on={!settings.accent} onclick={() => save({ accent: '' })} title="Template default" style="background:{template(settings.template).accent}">
+                <span class="sr">Template default</span>
+              </button>
+              {#each SWATCHES as c}
+                <button class="sw" class:on={settings.accent === c} style="background:{c}" onclick={() => save({ accent: c })} title={c}><span class="sr">{c}</span></button>
+              {/each}
+              <label class="sw custom" title="Pick any colour">
+                <input type="color" value={settings.accent || template(settings.template).accent} onchange={(e) => save({ accent: (e.target as HTMLInputElement).value })} />
+                <span class="sr">Custom colour</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="logo">
+            <span>Logo</span>
+            <div class="logo-row">
+              {#if settings.logo_path}<img src={url(settings.logo_path)} alt="Current logo" />{/if}
+              <label class="btnlike">
+                {settings.logo_path ? 'Replace' : 'Upload logo'}
+                <input type="file" accept="image/png,image/jpeg,image/webp" onchange={uploadLogo} hidden />
+              </label>
+              {#if settings.logo_path}<button class="ghost" onclick={removeLogo}>Remove</button>{/if}
+            </div>
+            <small>PNG, JPG or WebP up to 10 MB. A transparent PNG works on every template.</small>
+          </div>
+        </div>
+      </section>
+    {/if}
 
     {#if settings}
       <section class="settings">
@@ -358,5 +463,142 @@
     color: #ff7b8f;
     margin: 0 0 8px;
     font-size: 14px;
+  }
+  .look {
+    background: #151822;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 14px;
+  }
+  .look-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  h2 {
+    margin: 0 0 4px;
+    font-size: 17px;
+  }
+  .saved {
+    font-size: 13px;
+    color: #6fd0a0;
+    min-height: 1em;
+  }
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 12px;
+    margin: 14px 0;
+  }
+  .tile {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    text-align: left;
+    padding: 8px 8px 10px;
+    background: #1a1d27;
+    border: 2px solid transparent;
+    border-radius: 12px;
+  }
+  .tile.on {
+    border-color: #e8456b;
+  }
+  .tile :global(.lw-wall.mini) {
+    aspect-ratio: 16 / 9;
+    height: auto;
+    border-radius: 6px;
+    margin-bottom: 6px;
+    pointer-events: none;
+  }
+  .tname {
+    font-weight: 600;
+  }
+  .tfor {
+    font-size: 12.5px;
+    opacity: 0.65;
+  }
+  .fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+    align-items: start;
+  }
+  .fields label,
+  .accent,
+  .logo {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 13px;
+  }
+  .swatches {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .sw {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 50%;
+    border: 2px solid #0f1117;
+    box-shadow: 0 0 0 1px #3a4055;
+    position: relative;
+    cursor: pointer;
+  }
+  .sw.on {
+    box-shadow: 0 0 0 2px #e1e4ea;
+  }
+  .sw.def {
+    outline: 1px dashed #e1e4ea;
+    outline-offset: 2px;
+  }
+  .sw.custom {
+    background: conic-gradient(#f44, #fd4, #4d8, #4af, #a4f, #f44);
+    overflow: hidden;
+  }
+  .sw.custom input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+  }
+  .logo-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .logo-row img {
+    height: 40px;
+    max-width: 120px;
+    object-fit: contain;
+    background: repeating-conic-gradient(#2a2e3b 0 25%, #1f2230 0 50%) 0 0 / 12px 12px;
+    border-radius: 6px;
+  }
+  .btnlike {
+    background: #2c3040;
+    border-radius: 8px;
+    padding: 10px 14px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  button:focus-visible,
+  .btnlike:focus-within,
+  .sw:focus-within,
+  input:focus-visible {
+    outline: 2px solid #8ab4ff;
+    outline-offset: 2px;
   }
 </style>

@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import '../styles/lovewall.css';
+  import { accentStyle, loadFonts, type Look } from '../lib/lovewall-theme';
 
   let { slug }: { slug: string } = $props();
 
@@ -7,7 +9,10 @@
   const MAX_PHOTO = 10_000_000;
   const MAX_VIDEO = 30_000_000;
 
-  let title = $state('');
+  const MEDIA = import.meta.env.PUBLIC_BACKEND_URL ?? 'https://creka.online';
+
+  let campaignName = $state('');
+  let look = $state<Look | null>(null);
   let open = $state(true);
   let name = $state('');
   let body = $state('');
@@ -38,8 +43,10 @@
     const res = await fetch(`/api/lovewall/${slug}/wall`).catch(() => null);
     if (res?.ok) {
       const j = await res.json();
-      title = j.campaign.name;
+      campaignName = j.campaign.name;
+      look = j.settings;
       open = j.settings.submissions_open;
+      loadFonts(look?.template);
     }
   });
 
@@ -90,135 +97,56 @@
   }
 </script>
 
-<div class="wrap">
-  <main>
-    <h1>{title || 'Love wall'}</h1>
+<!-- the page stays blank until the look arrives, so a wedding never flashes the default dark theme -->
+{#if look}
+  <div class="lw lw-guest" data-theme={look.template} style={accentStyle(look.accent)}>
+    <main class="lw-page">
+      <header class="lw-head">
+        {#if look.logo_path}<img class="lw-logo" src={MEDIA + look.logo_path} alt="" />{/if}
+        <div class="lw-titles">
+          <h1 class="lw-title">{look.title || campaignName || 'Leave a message'}</h1>
+          {#if look.subtitle}<p class="lw-sub">{look.subtitle}</p>{/if}
+        </div>
+        <div class="lw-orn" aria-hidden="true"><i></i></div>
+      </header>
 
-    {#if sent}
-      <div class="done">
-        <div class="big">{sent === 'approved' ? '💌' : '🙏'}</div>
-        <p>{sent === 'approved' ? 'Sent! Look out for it on the wall.' : 'Thanks! Your message will appear on the wall once the organiser approves it.'}</p>
-        <button onclick={() => (sent = null)}>Send another</button>
-      </div>
-    {:else if !open}
-      <p class="muted">Messages are closed for now.</p>
-    {:else}
-      <p class="muted">Leave a message, photo or short video for the wall.</p>
-      <input placeholder="Your name (optional)" maxlength="40" bind:value={name} />
-      <textarea placeholder="Your message" maxlength="500" rows="4" bind:value={body}></textarea>
+      {#if sent}
+        <div class="lw-done" role="status">
+          <svg class="lw-done-icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            {#if sent === 'approved'}<circle cx="24" cy="24" r="20" /><path d="M15 25l6 6 12-14" />{:else}<circle cx="24" cy="24" r="20" /><path d="M24 14v11l7 4" />{/if}
+          </svg>
+          <p>{sent === 'approved' ? 'Sent! Look out for it on the wall.' : 'Thank you! Your message will appear on the wall once the organiser approves it.'}</p>
+          <button class="lw-btn ghost" onclick={() => (sent = null)}>Send another</button>
+        </div>
+      {:else if !open}
+        <p class="lw-lede">Messages are closed for now.</p>
+      {:else}
+        <p class="lw-lede">Leave a message, photo or short video for the wall.</p>
+        <input class="lw-field" placeholder="Your name (optional)" maxlength="40" autocomplete="name" bind:value={name} />
+        <textarea class="lw-field" placeholder="Your message" maxlength="500" rows="4" bind:value={body}></textarea>
 
-      <label class="file">
-        {file ? file.name : '📷 Add a photo or video'}
-        <input type="file" accept="image/*,video/*" onchange={pick} hidden />
-      </label>
-      {#if preview}
-        {#if file?.type.startsWith('video/')}
-          <!-- svelte-ignore a11y_media_has_caption -->
-          <video src={preview} controls playsinline muted></video>
-        {:else}
-          <img src={preview} alt="preview" />
+        <label class="lw-file">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8a2 2 0 012-2h2l1.5-2h5L16 6h2a2 2 0 012 2v9a2 2 0 01-2 2H6a2 2 0 01-2-2z" /><circle cx="12" cy="12.5" r="3.5" /></svg>
+          <span>{file ? file.name : 'Add a photo or video'}</span>
+          <input type="file" accept="image/*,video/*" onchange={pick} hidden />
+        </label>
+        {#if preview}
+          {#if file?.type.startsWith('video/')}
+            <!-- svelte-ignore a11y_media_has_caption -->
+            <video class="lw-preview" src={preview} controls playsinline muted></video>
+          {:else}
+            <img class="lw-preview" src={preview} alt="Preview of your photo" />
+          {/if}
         {/if}
+
+        <label class="lw-consent">
+          <input type="checkbox" bind:checked={consent} />
+          <span>I agree my message, photo or video may be shown on the wall and shared on the event's social media.</span>
+        </label>
+
+        {#if error}<p class="lw-err" role="alert">{error}</p>{/if}
+        <button class="lw-btn" disabled={sending} onclick={send}>{sending ? (file ? `Sending… ${progress}%` : 'Sending…') : 'Send'}</button>
       {/if}
-
-      <label class="consent">
-        <input type="checkbox" bind:checked={consent} />
-        <span>I agree my message, photo or video may be shown on the wall and shared on the event's social media.</span>
-      </label>
-
-      {#if error}<p class="err">{error}</p>{/if}
-      <button disabled={sending} onclick={send}>{sending ? (file ? `Sending… ${progress}%` : 'Sending…') : 'Send'}</button>
-    {/if}
-  </main>
-</div>
-
-<style>
-  .wrap {
-    min-height: 100vh;
-    display: flex;
-    justify-content: center;
-    background: #0f1117;
-    color: #e1e4ea;
-    font-family: system-ui, -apple-system, sans-serif;
-  }
-  main {
-    width: 100%;
-    max-width: 440px;
-    padding: 24px 16px 40px;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    box-sizing: border-box;
-  }
-  h1 {
-    margin: 8px 0 0;
-    font-size: 26px;
-    text-align: center;
-  }
-  .muted {
-    margin: 0;
-    opacity: 0.65;
-    text-align: center;
-  }
-  input:not([type]),
-  textarea {
-    background: #1a1d27;
-    border: 1px solid #2c3040;
-    border-radius: 10px;
-    color: inherit;
-    font: inherit;
-    padding: 12px;
-    resize: vertical;
-  }
-  .file {
-    border: 1px dashed #3a4055;
-    border-radius: 10px;
-    padding: 14px;
-    text-align: center;
-    cursor: pointer;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  img,
-  video {
-    width: 100%;
-    max-height: 320px;
-    object-fit: contain;
-    border-radius: 10px;
-    background: #000;
-  }
-  .consent {
-    display: flex;
-    gap: 10px;
-    font-size: 13px;
-    opacity: 0.8;
-    align-items: flex-start;
-  }
-  button {
-    background: #e8456b;
-    color: #fff;
-    border: 0;
-    border-radius: 10px;
-    padding: 14px;
-    font: inherit;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  button:disabled {
-    opacity: 0.6;
-  }
-  .err {
-    margin: 0;
-    color: #ff7b8f;
-    font-size: 14px;
-  }
-  .done {
-    text-align: center;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
-  .big {
-    font-size: 56px;
-  }
-</style>
+    </main>
+  </div>
+{/if}

@@ -9,7 +9,7 @@ const AUTH: Record<string, string> = {
   'auth/request': '/api/v1/campaigns/organiser/otp/request',
   'auth/verify': '/api/v1/campaigns/organiser/otp/verify',
 };
-const LOVEWALL = /^[\w-]+\/(wall|queue|settings|messages(\/\d+|\/bulk)?)$/;
+const LOVEWALL = /^[\w-]+\/(wall|queue|settings|logo|messages(\/\d+|\/bulk)?)$/;
 
 export const ALL: APIRoute = async ({ request, params, url }) => {
   const path = params.path ?? '';

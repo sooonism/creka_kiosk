@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import QRCode from 'qrcode';
+  import '../styles/lovewall.css';
+  import { accentStyle, loadFonts, type Look } from '../lib/lovewall-theme';
 
   let { slug }: { slug: string } = $props();
 
@@ -14,7 +16,8 @@
 
   let started = $state(false);
   let muted = $state(false);
-  let title = $state('');
+  let campaignName = $state('');
+  let look = $state<Look | null>(null);
   let maxVideo = $state(15);
   let items = $state<Msg[]>([]);
   let featured = $state<Msg | null>(null);
@@ -34,7 +37,11 @@
       const res = await fetch(`/api/lovewall/${slug}/wall`);
       if (!res.ok) return;
       const j = await res.json();
-      title = j.campaign.name;
+      campaignName = j.campaign.name;
+      if (JSON.stringify(look) !== JSON.stringify(j.settings)) {
+        look = j.settings;
+        loadFonts(look?.template);
+      }
       maxVideo = j.settings.max_video_s;
       items = j.data;
     } catch {
@@ -111,40 +118,50 @@
 
 <svelte:window onkeydown={key} />
 
-<div class="wall">
-  <header>{title}</header>
+<!-- blank until the look arrives, so the wall never flashes the wrong template -->
+{#if look}
+<div class="lw lw-wall" data-theme={look.template} style={accentStyle(look.accent)}>
+  <header class="lw-head">
+    {#if look.logo_path}<img class="lw-logo" src={url(look.logo_path)} alt="" />{/if}
+    <div class="lw-titles">
+      <h1 class="lw-title">{look.title || campaignName}</h1>
+      {#if look.subtitle}<p class="lw-sub">{look.subtitle}</p>{/if}
+    </div>
+    <div class="lw-orn" aria-hidden="true"><i></i></div>
+  </header>
 
-  <div class="grid">
+  <div class="lw-body">
+  <div class="lw-grid">
     {#each grid as m (m.id)}
-      <div class="card">
+      <div class="lw-card">
         {#if m.kind !== 'text'}<img src={url(m.kind === 'video' ? m.poster_path : m.media_path)} alt="" />{/if}
         {#if m.body}<p>{m.body}</p>{/if}
-        <small>{m.author_name || 'A guest'}{m.kind === 'video' ? ' · ▶' : ''}</small>
+        <small class="lw-by">{m.author_name || 'A guest'}{m.kind === 'video' ? ' · video' : ''}</small>
       </div>
     {/each}
   </div>
+  <aside class="lw-qr">
+    <img src={qr} alt="Scan to send a message" />
+    <span>Send us a message</span>
+  </aside>
+  </div>
 
   {#if !items.length}
-    <div class="empty">Scan to leave a message</div>
+    <div class="lw-empty">Scan the code to leave a message</div>
   {/if}
-
-  <div class="qr">
-    <img src={qr} alt="scan to send" />
-    <span>Send us a message</span>
-  </div>
 
   {#if featured}
     {#key featured.id}
-      <div class="spot" class:video={featured.kind === 'video'}>
+      <div class="lw-spot" class:video={featured.kind === 'video'}>
         {#if featured.kind === 'video'}
           <!-- svelte-ignore a11y_media_has_caption -->
           <video bind:this={videoEl} src={url(featured.media_path)} poster={url(featured.poster_path)} playsinline preload="auto" onended={rest} onerror={rest}></video>
-          <div class="cap">{featured.body ? featured.body + ' — ' : ''}{featured.author_name || 'A guest'}</div>
+          <div class="lw-cap">{featured.body ? featured.body + ' — ' : ''}{featured.author_name || 'A guest'}</div>
         {:else}
-          <div class="big">
+          <div class="lw-big">
             {#if featured.kind === 'photo'}<img src={url(featured.media_path)} alt="" />{/if}
             {#if featured.body}<p class:small={featured.kind === 'photo'}>{featured.body}</p>{/if}
-            <small>— {featured.author_name || 'A guest'}</small>
+            <small class="lw-by">{featured.author_name || 'A guest'}</small>
           </div>
         {/if}
       </div>
@@ -152,153 +169,7 @@
   {/if}
 
   {#if !started}
-    <button class="start" onclick={start}>Start wall</button>
+    <button class="lw-start" onclick={start}>Start wall</button>
   {/if}
 </div>
-
-<style>
-  .wall {
-    position: fixed;
-    inset: 0;
-    background: #0f1117;
-    color: #e1e4ea;
-    font-family: system-ui, -apple-system, sans-serif;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-  }
-  header {
-    padding: 2vmin 3vmin;
-    font-size: 4vmin;
-    font-weight: 700;
-    text-align: center;
-  }
-  .grid {
-    flex: 1;
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(28vmin, 1fr));
-    grid-auto-rows: minmax(0, 1fr);
-    gap: 2vmin;
-    padding: 0 3vmin 3vmin;
-    min-height: 0;
-  }
-  .card {
-    background: #1a1d27;
-    border-radius: 2vmin;
-    padding: 2vmin;
-    display: flex;
-    flex-direction: column;
-    gap: 1vmin;
-    min-height: 0;
-    overflow: hidden;
-    animation: pop 0.6s ease;
-  }
-  .card img {
-    flex: 1;
-    min-height: 0;
-    object-fit: cover;
-    border-radius: 1vmin;
-  }
-  .card p {
-    margin: 0;
-    font-size: 2.6vmin;
-  }
-  small {
-    opacity: 0.6;
-    font-size: 2vmin;
-  }
-  .empty {
-    position: absolute;
-    inset: 0;
-    display: grid;
-    place-items: center;
-    font-size: 6vmin;
-    opacity: 0.5;
-  }
-  .qr {
-    position: absolute;
-    right: 2vmin;
-    bottom: 2vmin;
-    background: #fff;
-    color: #111;
-    border-radius: 1.5vmin;
-    padding: 1vmin;
-    text-align: center;
-    font-size: 1.8vmin;
-  }
-  .qr img {
-    width: 14vmin;
-    display: block;
-  }
-  .spot {
-    position: absolute;
-    inset: 0;
-    display: grid;
-    place-items: center;
-    background: rgba(8, 9, 14, 0.88);
-    animation: fade 0.5s ease;
-  }
-  .spot.video {
-    background: #000;
-  }
-  .spot video {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-  }
-  .cap {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    padding: 4vmin;
-    font-size: 3.2vmin;
-    background: linear-gradient(transparent, rgba(0, 0, 0, 0.75));
-  }
-  .big {
-    max-width: 80vw;
-    max-height: 85vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2vmin;
-    text-align: center;
-  }
-  .big img {
-    max-width: 100%;
-    max-height: 60vh;
-    border-radius: 2vmin;
-    object-fit: contain;
-  }
-  .big p {
-    margin: 0;
-    font-size: 6vmin;
-    line-height: 1.25;
-  }
-  .big p.small {
-    font-size: 3.4vmin;
-  }
-  .big small {
-    font-size: 3vmin;
-  }
-  .start {
-    position: absolute;
-    inset: 0;
-    margin: auto;
-    width: 40vmin;
-    height: 12vmin;
-    font-size: 4vmin;
-    border: 0;
-    border-radius: 3vmin;
-    background: #e8456b;
-    color: #fff;
-    cursor: pointer;
-    z-index: 10;
-  }
-  @keyframes pop {
-    from { opacity: 0; transform: scale(0.92); }
-  }
-  @keyframes fade {
-    from { opacity: 0; }
-  }
-</style>
+{/if}
