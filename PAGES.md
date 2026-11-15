@@ -22,3 +22,6 @@
 | `/admin/perf_debug` | `PerfDebug.svelte` | Performance debug: camera/MP/resolution tuning for OrangePi | ✅ Done |
 | `/admin/slide_show` | `SlideShow.svelte` | Simple image slideshow with auto-advance | ✅ Done |
 | `/admin/dashboard` | `Dashboard.svelte` (`KiosksAdmin`, `AppsList`) | Tabs: Kiosks (collapsible fleet, module, hardware, captures) + Apps (every page, list in `src/lib/apps.ts`); OTP admin login | 🟡 WIP |
+| `/lovewall/[slug]` | `LovewallSubmit.svelte` | Guest page: text / photo / video message for a `kiosk` campaign's wall (QR target) | 🟡 WIP |
+| `/lovewall/[slug]/wall` | `LovewallWall.svelte` | Big-screen wall: card grid, featured item, videos full screen with sound (click Start once) | 🟡 WIP |
+| `/lovewall/[slug]/organiser` | `LovewallOrganiser.svelte` | Organiser: OTP login, moderation queue, mode / blocklist / pause settings | 🟡 WIP |

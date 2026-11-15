@@ -1,0 +1,11 @@
+---
+import Layout from '../../../layouts/Layout.astro';
+import LovewallSubmit from '../../../components/LovewallSubmit.svelte';
+
+export const prerender = false;
+const { slug } = Astro.params;
+---
+
+<Layout>
+  <LovewallSubmit slug={slug!} client:only="svelte" />
+</Layout>
