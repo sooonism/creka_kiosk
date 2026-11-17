@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import QRCode from 'qrcode';
   import '../styles/lovewall.css';
-  import LovewallConfetti from './LovewallConfetti.svelte';
+  import LovewallBackdrop from './LovewallBackdrop.svelte';
   import { accentStyle, loadFonts, type Look } from '../lib/lovewall-theme';
 
   let { slug }: { slug: string } = $props();
@@ -151,7 +151,7 @@
 <!-- blank until the look arrives, so the wall never flashes the wrong template -->
 {#if look}
 <div class="lw lw-wall" data-theme={look.template} style={accentStyle(look.accent)}>
-  {#if look.template === 'festive'}<LovewallConfetti />{/if}
+  <LovewallBackdrop theme={look.template} />
   <header class="lw-head">
     {#if look.logo_path}<img class="lw-logo" src={url(look.logo_path)} alt="" />{/if}
     <div class="lw-titles">

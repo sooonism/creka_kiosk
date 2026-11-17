@@ -3,12 +3,15 @@
   import QRCode from "qrcode";
   import CamWithMe from "./CamWithMe.svelte";
   import { openKioskLink, dayMYT, hourMYT } from "../lib/kioskLink";
+  import { DEFAULT_DESIGN, type Design } from "../lib/design";
 
   let { src }: { src: string } = $props();
   let faceDetected = $state(false);
   let faceOnRight = $state(false);
-  // livecam nkob cycles to the next image each time he switches sides; add more here
-  const NKOB_POSES = [1, 2, 3, 4, 5].map((n) => `/img/demo/camwithnkob/pose${n}.png`);
+  // livecam nkob cycles to the next image each time he switches sides; the list and the bg come from
+  // /api/design (edited on /demo/camwithnkob/designer), the shipped images are the fallback when it's unreachable
+  let nkobPoses = $state(DEFAULT_DESIGN.poses);
+  let bgUrl = $state(DEFAULT_DESIGN.bg);
   let poseIdx = $state(0);
   const COVER_IMG = {
     idle: "/img/demo/camwithnkob/sleep_a.svg",
@@ -37,7 +40,7 @@
     pose.y = 60; // % of its own height, higher = lower on screen
   };
   const nextPose = () => {
-    poseIdx = (poseIdx + rand(1, NKOB_POSES.length - 1)) % NKOB_POSES.length; // random, never the same pose twice in a row
+    poseIdx = (poseIdx + rand(1, nkobPoses.length - 1)) % nkobPoses.length; // random, never the same pose twice in a row
     rerollPose();
   };
   const onFaceSize = (w: number) => (faceW = w);
@@ -88,13 +91,27 @@
   let sharpness = $state(12); // camera sharpening 0-31; the Pi's cam ships at 2, which is very soft
   // decode every image the flow shows up front, so the first reveal/greet doesn't hitch on a cold decode
   const warm: HTMLImageElement[] = [];
-  onMount(() => {
-    for (const src of [...NKOB_POSES, ...Object.values(COVER_IMG), "/img/demo/camwithnkob/bg.webp"]) {
+  const warmUp = (urls: string[]) => {
+    for (const src of urls) {
       const img = new Image();
       img.src = src;
       img.decode().catch(() => {});
       warm.push(img); // keep a reference so the decoded bitmap isn't dropped
     }
+  };
+  onMount(async () => {
+    warmUp([...nkobPoses, ...Object.values(COVER_IMG), bgUrl]);
+    // designer's images, read once per page load (dashboard "Reload page" picks up a change)
+    const d: Design | null = await fetch("/api/design").then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    if (!d?.poses?.length) return;
+    nkobPoses = d.poses;
+    bgUrl = d.bg;
+    poseIdx = 0;
+    warmUp([...d.poses, d.bg]);
+  });
+  $effect(() => {
+    document.documentElement.style.setProperty("--nkob-bg", `url("${bgUrl}")`);
+    return () => document.documentElement.style.removeProperty("--nkob-bg");
   });
   onMount(() => {
     onMouseMove(); // start the 2s hide timer even if the mouse never moves
@@ -487,7 +504,7 @@
   <div class="slot">
     <img
       bind:this={nkobEl}
-      src={NKOB_POSES[poseIdx]}
+      src={nkobPoses[poseIdx]}
       alt="Nkob"
       style="transform: translateX({translateX}%) translateY({pose.y}%) rotate({rotate}deg) scale({pose.s});"
     />
@@ -624,7 +641,7 @@
   }
   .bg {
     z-index: 10;
-    background-image: url("/img/demo/camwithnkob/bg.webp");
+    background-image: var(--nkob-bg, url("/img/demo/camwithnkob/bg.webp"));
   }
   .bg-snap {
     z-index: 55; /* fades in over the white flash after a snap */
@@ -667,7 +684,7 @@
     position: fixed;
     inset: 0;
     z-index: 30;
-    background: #000 url("/img/demo/camwithnkob/bg.webp") center / cover no-repeat;
+    background: #000 var(--nkob-bg, url("/img/demo/camwithnkob/bg.webp")) center / cover no-repeat;
     display: flex;
     flex-direction: column;
     align-items: center;
