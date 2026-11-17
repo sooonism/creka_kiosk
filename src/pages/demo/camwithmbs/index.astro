@@ -1,0 +1,17 @@
+---
+import Layout from '../../../layouts/Layout.astro';
+import CamWithMbs from '../../../components/CamWithMbs.svelte';
+import nkob from '../../../assets/nkob.png';
+
+const IMG = '/img/demo/mbs';
+const skin = {
+  poses: [1, 2, 3, 4, 5].map((n) => `${IMG}/MBG-mascot-00${n}.png`),
+  cover: `${IMG}/MBG-mascot-001.png`,
+  logo: `${IMG}/roundtable_logo.png`,
+  bg: `${IMG}/bg.webp`,
+};
+---
+
+<Layout>
+  <CamWithMbs src={nkob.src} {skin} client:load />
+</Layout>
