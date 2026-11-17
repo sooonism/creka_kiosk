@@ -8,6 +8,11 @@
   const MEDIA = import.meta.env.PUBLIC_BACKEND_URL ?? 'https://creka.online';
   const TOKEN_KEY = `lw-org-${slug}`;
   const TABS = ['pending', 'approved', 'rejected', 'hidden'] as const;
+  const KINDS = [
+    ['text', 'Text'],
+    ['photo', 'Photos'],
+    ['video', 'Videos'],
+  ];
   const MODES = [
     ['review_video', 'Review videos only'],
     ['review_all', 'Review everything'],
@@ -287,10 +292,26 @@
           <input type="checkbox" checked={settings.submissions_open} onchange={(e) => save({ submissions_open: (e.target as HTMLInputElement).checked })} />
           Accepting messages
         </label>
-        <label>
-          Max video length (s)
-          <input type="number" min="3" max="60" value={settings.max_video_s} onchange={(e) => save({ max_video_s: +(e.target as HTMLInputElement).value })} />
-        </label>
+        <fieldset class="wide kinds">
+          <legend>Guests can send</legend>
+          {#each KINDS as [k, label]}
+            <label class="row">
+              <input
+                type="checkbox"
+                checked={settings['allow_' + k] !== false}
+                disabled={settings['allow_' + k] !== false && KINDS.filter(([j]) => settings['allow_' + j] !== false).length === 1}
+                onchange={(e) => save({ ['allow_' + k]: (e.target as HTMLInputElement).checked })}
+              />
+              {label}
+            </label>
+          {/each}
+        </fieldset>
+        {#if settings.allow_video !== false}
+          <label>
+            Max video length (s)
+            <input type="number" min="3" max="60" value={settings.max_video_s} onchange={(e) => save({ max_video_s: +(e.target as HTMLInputElement).value })} />
+          </label>
+        {/if}
         <label class="wide">
           Hold for review if text contains (comma separated)
           <input bind:value={blocklist} onchange={() => save({ blocklist: blocklist.split(',').map((w) => w.trim()).filter(Boolean) })} />
@@ -424,6 +445,20 @@
   }
   .wide {
     grid-column: 1 / -1;
+  }
+  .kinds {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 20px;
+    border: 0;
+    padding: 0;
+    margin: 0;
+    font-size: 13px;
+  }
+  .kinds legend {
+    padding: 0;
+    margin-bottom: 6px;
+    opacity: 0.9;
   }
   nav {
     display: flex;

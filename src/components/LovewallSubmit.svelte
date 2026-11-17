@@ -51,9 +51,23 @@
     }
   });
 
+  // what the organiser lets guests send; older backends send nothing, so default to everything
+  const can = $derived({ text: look?.allow_text !== false, photo: look?.allow_photo !== false, video: look?.allow_video !== false });
+  const media = $derived(can.photo || can.video);
+  const mediaWord = $derived(can.photo && can.video ? 'photo or video' : can.photo ? 'photo' : 'video');
+  const accept = $derived([can.photo && 'image/*', can.video && 'video/*'].filter(Boolean).join(','));
+  const lede = $derived(
+    'Leave a ' + [can.text && 'message', can.photo && 'photo', can.video && 'short video'].filter(Boolean).join(', ').replace(/, ([^,]*)$/, ' or $1') + ' for the wall.'
+  );
+
   function pick(e: Event) {
     error = '';
     const f = (e.target as HTMLInputElement).files?.[0] ?? null;
+    if (f && !(f.type.startsWith('video/') ? can.video : can.photo)) {
+      error = `Sorry, ${f.type.startsWith('video/') ? 'videos' : 'photos'} are not being accepted for this event.`;
+      (e.target as HTMLInputElement).value = '';
+      return;
+    }
     if (f && f.size > (f.type.startsWith('video/') ? MAX_VIDEO : MAX_PHOTO)) {
       error = f.type.startsWith('video/') ? 'Video is over 30 MB — try a shorter clip.' : 'Photo is over 10 MB.';
       (e.target as HTMLInputElement).value = '';
@@ -67,7 +81,7 @@
   // XHR, not fetch: it reports upload progress, which matters for a video on venue wifi
   function send() {
     error = '';
-    if (!body.trim() && !file) return (error = 'Write something or add a photo or video.');
+    if (!(can.text && body.trim()) && !file) return (error = can.text ? `Write something${media ? ` or add a ${mediaWord}` : ''}.` : `Add a ${mediaWord}.`);
     if (!consent) return (error = 'Please tick the box so we can show your message.');
     try { localStorage.setItem('lw-name', name); } catch {}
 
@@ -123,15 +137,19 @@
       {:else if !open}
         <p class="lw-lede">Messages are closed for now.</p>
       {:else}
-        <p class="lw-lede">Leave a message, photo or short video for the wall.</p>
+        <p class="lw-lede">{lede}</p>
         <input class="lw-field" placeholder="Your name (optional)" maxlength="40" autocomplete="name" bind:value={name} />
-        <textarea class="lw-field" placeholder="Your message" maxlength="500" rows="4" bind:value={body}></textarea>
+        {#if can.text}
+          <textarea class="lw-field" placeholder="Your message" maxlength="500" rows="4" bind:value={body}></textarea>
+        {/if}
 
+        {#if media}
         <label class="lw-file">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8a2 2 0 012-2h2l1.5-2h5L16 6h2a2 2 0 012 2v9a2 2 0 01-2 2H6a2 2 0 01-2-2z" /><circle cx="12" cy="12.5" r="3.5" /></svg>
-          <span>{file ? file.name : 'Add a photo or video'}</span>
-          <input type="file" accept="image/*,video/*" onchange={pick} hidden />
+          <span>{file ? file.name : `Add a ${mediaWord}`}</span>
+          <input type="file" {accept} onchange={pick} hidden />
         </label>
+        {/if}
         {#if preview}
           {#if file?.type.startsWith('video/')}
             <!-- svelte-ignore a11y_media_has_caption -->
