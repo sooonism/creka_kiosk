@@ -3,6 +3,7 @@
   import QRCode from 'qrcode';
   import '../styles/lovewall.css';
   import LovewallBackdrop from './LovewallBackdrop.svelte';
+  import LovewallPhoto from './LovewallPhoto.svelte';
   import { accentStyle, loadFonts, type Look } from '../lib/lovewall-theme';
 
   let { slug }: { slug: string } = $props();
@@ -13,13 +14,13 @@
   const CARD_MS = 8000; // how long a text/photo is featured; videos play to the end
   const GRID = 9; // cards visible behind the spotlight
 
-  interface Msg { id: number; kind: 'text' | 'photo' | 'video'; author_name: string; body: string; media_path: string | null; poster_path: string | null; pinned: boolean }
+  interface Msg { id: number; kind: 'text' | 'photo' | 'video'; author_name: string; body: string; media_path: string | null; poster_path: string | null; stickers?: { src: string; x: number; y: number; s: number; r: number }[]; pinned: boolean }
 
   let started = $state(false);
   let muted = $state(false);
   let campaignName = $state('');
   let look = $state<Look | null>(null);
-  let maxVideo = $state(15);
+  let maxVideo = $state(30);
   let items = $state<Msg[]>([]);
   let featured = $state<Msg | null>(null);
   let qr = $state('');
@@ -165,18 +166,14 @@
   <div class="lw-grid">
     {#each grid as m (m.id)}
       <div class="lw-card">
-        {#if m.kind !== 'text'}<img src={url(m.kind === 'video' ? m.poster_path : m.media_path)} alt="" />{/if}
+        {#if m.kind === 'photo' && m.stickers?.length}
+          <LovewallPhoto src={url(m.media_path)} stickers={m.stickers} />
+        {:else if m.kind !== 'text'}<img src={url(m.kind === 'video' ? m.poster_path : m.media_path)} alt="" />{/if}
         {#if m.body}<p>{m.body}</p>{/if}
         <small class="lw-by">{m.author_name || 'A guest'}{m.kind === 'video' ? ' · video' : ''}</small>
       </div>
     {/each}
   </div>
-  {#if look.show_qr !== false}
-    <aside class="lw-qr">
-      <img src={qr} alt="Scan to send a message" />
-      <span>Send us a message</span>
-    </aside>
-  {/if}
   </div>
 
   {#if !items.length}
@@ -192,13 +189,23 @@
           <div class="lw-cap">{featured.body ? featured.body + ' — ' : ''}{featured.author_name || 'A guest'}</div>
         {:else}
           <div class="lw-big">
-            {#if featured.kind === 'photo'}<img src={url(featured.media_path)} alt="" />{/if}
+            {#if featured.kind === 'photo'}
+              {#if featured.stickers?.length}<LovewallPhoto big src={url(featured.media_path)} stickers={featured.stickers} />{:else}<img src={url(featured.media_path)} alt="" />{/if}
+            {/if}
             {#if featured.body}<p class:small={featured.kind === 'photo'}>{featured.body}</p>{/if}
             <small class="lw-by">{featured.author_name || 'A guest'}</small>
           </div>
         {/if}
       </div>
     {/key}
+  {/if}
+
+  <!-- outside .lw-body (its own stacking context) so it stays above a full-screen spotlight -->
+  {#if look.show_qr !== false}
+    <aside class="lw-qr">
+      <img src={qr} alt="Scan to send a message" />
+      <span>Send us a message</span>
+    </aside>
   {/if}
 
   {#if wantFs}

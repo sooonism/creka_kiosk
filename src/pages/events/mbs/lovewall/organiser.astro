@@ -1,0 +1,10 @@
+---
+import Layout from '../../../../layouts/Layout.astro';
+import LovewallOrganiser from '../../../../components/LovewallOrganiser.svelte';
+
+export const prerender = false;
+---
+
+<Layout>
+  <LovewallOrganiser slug="mbs" client:only="svelte" />
+</Layout>

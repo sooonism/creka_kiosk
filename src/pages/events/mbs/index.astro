@@ -1,0 +1,17 @@
+---
+import Layout from '../../../layouts/Layout.astro';
+
+const links = [
+  ['photobooth', 'Photobooth (kiosk)'],
+  ['lovewall', 'Lovewall: guest page'],
+  ['lovewall/wall', 'Lovewall: big screen'],
+  ['lovewall/organiser', 'Lovewall: organiser'],
+];
+---
+
+<Layout>
+  <h1>MBS event</h1>
+  <ul>
+    {links.map(([href, label]) => <li><a href={`/events/mbs/${href}`}>{label}</a></li>)}
+  </ul>
+</Layout>

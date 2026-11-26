@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import '../styles/lovewall.css';
   import LovewallBackdrop from './LovewallBackdrop.svelte';
   import { accentStyle, loadFonts, type Look } from '../lib/lovewall-theme';
@@ -34,6 +34,7 @@
   const kiosk = new URLSearchParams(typeof location === 'undefined' ? '' : location.search).get('kiosk');
 
   onMount(async () => {
+    recordApi = typeof MediaRecorder !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
     try {
       deviceId = localStorage.getItem('lw-device') ?? uuid();
       localStorage.setItem('lw-device', deviceId);
@@ -74,9 +75,101 @@
       return;
     }
     file = f;
+    stickers = []; selected = null;
     if (preview) URL.revokeObjectURL(preview);
     preview = f ? URL.createObjectURL(f) : '';
   }
+
+  // Stickers on a photo. Position/size are fractions of the photo so the on-screen edit and the flattened upload match.
+  // Test set = the MBS photobooth poses; a per-event set can replace this list later.
+  const STICKERS = [1, 2, 3, 4, 5].map((n) => `/img/demo/mbs/MBG-mascot-00${n}.png`);
+  type Sticker = { id: number; src: string; x: number; y: number; s: number; r: number };
+  let stickers = $state<Sticker[]>([]);
+  let selected = $state<number | null>(null);
+  let editEl = $state<HTMLElement | null>(null);
+  let stickerId = 0;
+  const isPhoto = $derived(!!file && file.type.startsWith('image/'));
+  const sel = $derived(stickers.find((t) => t.id === selected));
+
+  function addSticker(src: string) {
+    stickers.push({ id: ++stickerId, src, x: 0.5, y: 0.5, s: 0.32, r: 0 });
+    selected = stickerId;
+  }
+  const removeSticker = () => { stickers = stickers.filter((t) => t.id !== selected); selected = null; };
+
+  function dragSticker(e: PointerEvent, t: Sticker) {
+    selected = t.id;
+    const el = e.currentTarget as HTMLElement;
+    el.setPointerCapture(e.pointerId);
+    const box = editEl!.getBoundingClientRect();
+    const move = (m: PointerEvent) => {
+      t.x = Math.min(1.3, Math.max(-0.3, (m.clientX - box.left) / box.width));
+      t.y = Math.min(1.3, Math.max(-0.3, (m.clientY - box.top) / box.height));
+    };
+    const up = () => { el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); };
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', up);
+  }
+
+  // In-app recording: hard stop at REC_MAX_S, corner countdown for the last REC_MAX_S - REC_WARN_S seconds.
+  // Needs getUserMedia (https or localhost), so the button only shows where it exists; the file picker stays as the fallback.
+  const REC_MAX_S = 30;
+  const REC_WARN_S = 20;
+  let recordApi = $state(false); // set in onMount: SSR has no navigator
+  const canRecord = $derived(can.video && recordApi);
+  let recording = $state(false);
+  let elapsed = $state(0);
+  let liveEl = $state<HTMLVideoElement | null>(null);
+  let stream: MediaStream | null = null;
+  let recorder: MediaRecorder | null = null;
+  let tick: ReturnType<typeof setInterval> | undefined;
+
+  async function startRecording() {
+    error = '';
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
+    } catch {
+      return (error = 'Could not open the camera. Allow camera and microphone access, or add a video instead.');
+    }
+    const mime = ['video/mp4', 'video/webm'].find((t) => MediaRecorder.isTypeSupported(t)) ?? '';
+    // ~2.5 Mbit/s keeps 30 s near 10 MB, well under the 30 MB upload cap
+    recorder = new MediaRecorder(stream, { ...(mime && { mimeType: mime }), videoBitsPerSecond: 2_500_000 });
+    const chunks: Blob[] = [];
+    recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+    recorder.onstop = () => {
+      const type = recorder?.mimeType || mime || 'video/webm';
+      file = new File(chunks, `recording${type.includes('mp4') ? '.mp4' : '.webm'}`, { type });
+      if (preview) URL.revokeObjectURL(preview);
+      preview = URL.createObjectURL(file);
+      cleanupRecording();
+    };
+    recording = true;
+    elapsed = 0;
+    // the live <video> mounts once `recording` flips, so attach the stream after the DOM updates
+    queueMicrotask(() => liveEl && ((liveEl.srcObject = stream), liveEl.play()));
+    recorder.start();
+    const t0 = Date.now();
+    tick = setInterval(() => {
+      elapsed = (Date.now() - t0) / 1000;
+      if (elapsed >= REC_MAX_S) stopRecording();
+    }, 200);
+  }
+
+  const stopRecording = () => recorder?.state === 'recording' && recorder.stop();
+
+  function cleanupRecording() {
+    clearInterval(tick);
+    stream?.getTracks().forEach((t) => t.stop());
+    stream = null;
+    recording = false;
+  }
+
+  // leaving mid-recording must release the camera without producing a file
+  onDestroy(() => {
+    if (recorder) recorder.onstop = null;
+    stopRecording();
+    cleanupRecording();
+  });
 
   // XHR, not fetch: it reports upload progress, which matters for a video on venue wifi
   function send() {
@@ -92,6 +185,8 @@
     fd.set('device_id', deviceId);
     if (kiosk) { fd.set('source', 'kiosk'); fd.set('kiosk_id', kiosk); }
     if (file) fd.set('file', file);
+    // stickers travel as positions (fractions of the photo); the wall draws them back over the untouched photo
+    if (isPhoto && stickers.length) fd.set('stickers', JSON.stringify(stickers.map(({ src, x, y, s, r }) => ({ src, x, y, s, r }))));
 
     const xhr = new XMLHttpRequest();
     xhr.open('POST', `/api/lovewall/${slug}/messages`);
@@ -102,7 +197,7 @@
       try { j = JSON.parse(xhr.responseText); } catch {}
       if (xhr.status === 201) {
         sent = j.moderation === 'approved' ? 'approved' : 'pending';
-        body = ''; file = null; preview = ''; consent = false;
+        body = ''; file = null; preview = ''; consent = false; stickers = []; selected = null;
       } else error = j.message ?? (xhr.status === 413 ? 'File is too big.' : 'Could not send, please try again.');
     };
     xhr.onerror = () => { sending = false; error = 'No connection — please try again.'; };
@@ -149,14 +244,43 @@
           <span>{file ? file.name : `Add a ${mediaWord}`}</span>
           <input type="file" {accept} onchange={pick} hidden />
         </label>
+        {#if canRecord}
+          <button type="button" class="lw-btn ghost" onclick={startRecording}>Record a video (up to {REC_MAX_S}s)</button>
+        {/if}
         {/if}
         {#if preview}
           {#if file?.type.startsWith('video/')}
             <!-- svelte-ignore a11y_media_has_caption -->
             <video class="lw-preview" src={preview} controls playsinline muted></video>
           {:else}
-            <img class="lw-preview" src={preview} alt="Preview of your photo" />
+            <div class="lw-edit" bind:this={editEl}>
+              <img src={preview} alt="Preview of your photo" draggable="false" onpointerdown={() => (selected = null)} />
+              {#each stickers as t (t.id)}
+                <img class="lw-sticker" class:on={t.id === selected} src={t.src} alt="" draggable="false"
+                  style="left:{t.x * 100}%;top:{t.y * 100}%;width:{t.s * 100}%;transform:translate(-50%,-50%) rotate({t.r}deg)"
+                  onpointerdown={(e) => dragSticker(e, t)} />
+              {/each}
+            </div>
           {/if}
+        {/if}
+
+        {#if isPhoto}
+          {#if sel}
+            <div class="lw-stk-ctl">
+              <button type="button" onclick={() => (sel.s = Math.max(0.1, sel.s - 0.06))}>Smaller</button>
+              <button type="button" onclick={() => (sel.s = Math.min(1, sel.s + 0.06))}>Bigger</button>
+              <button type="button" onclick={() => (sel.r -= 15)}>↺</button>
+              <button type="button" onclick={() => (sel.r += 15)}>↻</button>
+              <button type="button" onclick={removeSticker}>Remove</button>
+            </div>
+          {:else if !stickers.length}
+            <p class="lw-hint">Tap a sticker to add it, then drag it on your photo.</p>
+          {/if}
+          <div class="lw-stickers" aria-label="Stickers">
+            {#each STICKERS as src}
+              <button type="button" onclick={() => addSticker(src)}><img {src} alt="Add sticker" /></button>
+            {/each}
+          </div>
         {/if}
 
         <label class="lw-consent">
@@ -168,5 +292,16 @@
         <button class="lw-btn" disabled={sending} onclick={send}>{sending ? (file ? `Sending… ${progress}%` : 'Sending…') : 'Send'}</button>
       {/if}
     </main>
+  </div>
+{/if}
+
+{#if recording}
+  <div class="lw-rec">
+    <!-- svelte-ignore a11y_media_has_caption -->
+    <video bind:this={liveEl} playsinline muted></video>
+    {#if elapsed >= REC_WARN_S}
+      <div class="lw-rec-count" role="timer" aria-live="off">{Math.max(0, Math.ceil(REC_MAX_S - elapsed))}</div>
+    {/if}
+    <button class="lw-btn lw-rec-stop" onclick={stopRecording}>Stop</button>
   </div>
 {/if}
