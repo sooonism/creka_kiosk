@@ -9,7 +9,9 @@ import { ADMIN_COOKIE, capturesDir, listPngs, readKiosks, validId } from '../../
 export const GET: APIRoute = async ({ url }) => {
   const kiosk = url.searchParams.get('kiosk');
   if (kiosk && !validId(kiosk)) return new Response('Bad kiosk id', { status: 400 });
-  const dir = capturesDir(kiosk);
+  const event = url.searchParams.get('event');
+  if (event && !validId(event)) return new Response('Bad event', { status: 400 });
+  const dir = capturesDir(kiosk, event);
   const withTime = await Promise.all(
     (await listPngs(dir)).map(async (n) => ({ id: n.slice(0, -4), t: (await stat(path.join(dir, n))).mtimeMs }))
   );

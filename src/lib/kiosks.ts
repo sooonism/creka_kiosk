@@ -20,8 +20,11 @@ export const CAPTURES_ROOT = process.env.CAPTURES_DIR ?? path.join(process.cwd()
 
 export const validId = (id: unknown): id is string => typeof id === 'string' && /^[a-z0-9-]{1,40}$/.test(id);
 
-// no id → legacy shared folder
-export const capturesDir = (kiosk?: string | null) => (kiosk ? path.join(CAPTURES_ROOT, kiosk) : CAPTURES_ROOT);
+// no id → legacy shared folder; an event (e.g. 'mbs') keeps its photos apart under _events/<event>/
+export const capturesDir = (kiosk?: string | null, event?: string | null) => {
+  const root = event ? path.join(CAPTURES_ROOT, '_events', event) : CAPTURES_ROOT;
+  return kiosk ? path.join(root, kiosk) : root;
+};
 
 // registry lives in creka_backend (CrekaCampaignRepo). Dashboard calls carry the admin's Creka API token
 // (from the OTP login cookie); the backend enforces admin, kiosk-side calls need none.

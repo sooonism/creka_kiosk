@@ -120,9 +120,9 @@
   });
   onMount(() => {
     onMouseMove(); // start the 2s hide timer even if the mouse never moves
-    countdownY = Number(localStorage.getItem("nkob-countdown-y") ?? countdownY);
-    sharpness = Number(localStorage.getItem("nkob-sharpness") ?? sharpness);
-    savedPoses = JSON.parse(localStorage.getItem("nkob-poses") ?? "[]");
+    countdownY = Number(localStorage.getItem("mbs-countdown-y") ?? countdownY);
+    sharpness = Number(localStorage.getItem("mbs-sharpness") ?? sharpness);
+    savedPoses = JSON.parse(localStorage.getItem("mbs-poses") ?? "[]");
   });
   // backend link (creka_backend `kiosk:<id>` channel): pushes UI state for the remote, applies its commands,
   // heartbeats after 30 idle minutes, reports errors and a daily wake-up check
@@ -193,13 +193,13 @@
     pushState?.(JSON.parse(snapshot));
   });
   $effect(() => {
-    localStorage.setItem("nkob-poses", JSON.stringify(savedPoses));
+    localStorage.setItem("mbs-poses", JSON.stringify(savedPoses));
   });
   $effect(() => {
-    localStorage.setItem("nkob-countdown-y", String(countdownY));
+    localStorage.setItem("mbs-countdown-y", String(countdownY));
   });
   $effect(() => {
-    localStorage.setItem("nkob-sharpness", String(sharpness));
+    localStorage.setItem("mbs-sharpness", String(sharpness));
   });
   // idle: fade past polaroids in and out, 3 random ones at the bottom and 3 more along the top, each tilted a bit
   // captures from before thumbnails existed only have the full png
@@ -217,12 +217,12 @@
     let t: any;
     const wait = (ms: number) => new Promise((r) => (t = setTimeout(r, ms)));
     (async () => {
-      const ids: string[] = await fetch("/api/captures" + location.search).then((r) => r.json()).catch(() => []);
+      const ids: string[] = await fetch("/api/captures" + location.search + EVENT_Q).then((r) => r.json()).catch(() => []);
       const shown = (id: string) => idleShots.some((s) => s?.src.includes(id));
       const swap = (k: number) => {
         const fresh = ids.filter((id) => !shown(id));
         const id = (fresh.length ? fresh : ids)[Math.floor(Math.random() * (fresh.length || ids.length))];
-        idleShots[k] = { src: `/captures/demo/camwithnkob/${kioskDir}${id}.thumb.jpg`, r: rand(-8, 8) };
+        idleShots[k] = { src: `/captures/demo/camwithnkob/_events/mbs/${kioskDir}${id}.thumb.jpg`, r: rand(-8, 8) };
       };
       while (alive && ids.length) {
         // bottom and top slot k change together, 600ms apart
@@ -482,7 +482,8 @@
   // per-kiosk capture folder, set via /k/<id> → ?kiosk=<id>
   const kiosk = typeof location === "undefined" ? null : new URLSearchParams(location.search).get("kiosk");
   const kioskDir = kiosk ? `${kiosk}/` : "";
-  const kioskQuery = kiosk ? `&kiosk=${kiosk}` : "";
+  const kioskQuery = (kiosk ? `&kiosk=${kiosk}` : "") + "&event=mbs";
+  const EVENT_Q = typeof location !== "undefined" && location.search ? "&event=mbs" : "?event=mbs"; // MBS photos are kept apart from the Nkob ones
 
   async function saveCapture(blob: Blob, image: string) {
     savedPhotoId = null;
@@ -491,7 +492,7 @@
       r.onload = () => res(r.result as string);
       r.readAsDataURL(blob);
     });
-    const res = await fetch("/api/save-capture" + location.search, {
+    const res = await fetch("/api/save-capture" + location.search + EVENT_Q, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ image: dataUrl, meta: { pose: poseIdx } }),
@@ -615,7 +616,7 @@
   <button onclick={() => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen())}>⛶ Fullscreen</button>
   <button class="snap" onclick={() => setStage("snapped")}>📷 Snap + preview</button>
   {#if savedPhotoId}
-    <a href={`${photoPath}?id=${savedPhotoId}`} target="_blank">View saved photo</a>
+    <a href={`${photoPath}?id=${savedPhotoId}${kioskQuery}`} target="_blank">View saved photo</a>
   {/if}
 </aside>
 

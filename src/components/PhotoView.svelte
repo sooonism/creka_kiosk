@@ -134,7 +134,8 @@
     const q = new URLSearchParams(location.search);
     const id = q.get('id');
     const kiosk = q.get('kiosk');
-    src = id ? `/captures/demo/camwithnkob/${kiosk ? kiosk + '/' : ''}${id}.png` : null;
+    const ev = q.get('event') ? `_events/${q.get('event')}/` : '';
+    src = id ? `/captures/demo/camwithnkob/${ev}${kiosk ? kiosk + '/' : ''}${id}.png` : null;
     if (src) {
       visible = false;
       const t = setTimeout(() => (visible = true), 1000);
