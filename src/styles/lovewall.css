@@ -426,8 +426,9 @@ html:has(.lw[data-theme='garden']) { background: #f2f0e4; }
 .lw-rec-count {
   position: absolute; top: max(16px, env(safe-area-inset-top)); right: 16px;
   min-width: 64px; padding: 8px 16px; border-radius: 999px; text-align: center;
-  font: 700 36px/1.2 system-ui, sans-serif; color: #fff; background: rgba(220, 38, 38, 0.85);
+  font: 700 28px/1.2 system-ui, sans-serif; font-variant-numeric: tabular-nums; color: #fff; background: rgba(0, 0, 0, 0.55);
 }
+.lw-rec-count.warn { color: #ff3b30; }
 .lw-rec-stop { position: absolute; bottom: max(24px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); }
 
 /* stickers on a guest photo: the box hugs the photo so a sticker's % position is a % of the photo */

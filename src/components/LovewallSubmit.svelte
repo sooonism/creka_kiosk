@@ -111,7 +111,7 @@
     el.addEventListener('pointerup', up);
   }
 
-  // In-app recording: hard stop at REC_MAX_S, corner countdown for the last REC_MAX_S - REC_WARN_S seconds.
+  // In-app recording: hard stop at REC_MAX_S, elapsed/limit in the corner, red from REC_WARN_S.
   // Needs getUserMedia (https or localhost), so the button only shows where it exists; the file picker stays as the fallback.
   const REC_MAX_S = 30;
   const REC_WARN_S = 20;
@@ -303,9 +303,7 @@
   <div class="lw-rec">
     <!-- svelte-ignore a11y_media_has_caption -->
     <video bind:this={liveEl} playsinline muted></video>
-    {#if elapsed >= REC_WARN_S}
-      <div class="lw-rec-count" role="timer" aria-live="off">{Math.max(0, Math.ceil(REC_MAX_S - elapsed))}</div>
-    {/if}
+    <div class="lw-rec-count" class:warn={elapsed >= REC_WARN_S} role="timer" aria-live="off">{Math.min(REC_MAX_S, Math.floor(elapsed))}/{REC_MAX_S}</div>
     <button class="lw-btn lw-rec-stop" onclick={stopRecording}>Stop</button>
   </div>
 {/if}
