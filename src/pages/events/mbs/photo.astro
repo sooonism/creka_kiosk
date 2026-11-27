@@ -1,0 +1,16 @@
+---
+import Layout from '../../../layouts/Layout.astro';
+import PhotoView from '../../../components/PhotoView.svelte';
+
+const IMG = '/img/demo/mbs';
+const skin = {
+  logo: `${IMG}/roundtable_logo.png`,
+  bg: `${IMG}/bg.webp`,
+  caption: 'Photo with the MBS mascot at Tabletop RoundTable by MBS, by @creka_community.',
+  hashtags: '#MBS #TabletopRoundTable #creka_kiosk',
+};
+---
+
+<Layout powered={false}>
+  <PhotoView {skin} client:load />
+</Layout>

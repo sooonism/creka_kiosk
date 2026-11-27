@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  let { sponsor = null, donate = false }: { sponsor?: string | null; donate?: boolean } = $props(); // sponsor: brand overlay while the photo slides in; donate: dummy donate popup once it lands
+  // skin: another event's branding (logo, background, share captions); unset = the Nkob page
+  let { sponsor = null, donate = false, skin = null }: { sponsor?: string | null; donate?: boolean; skin?: { logo: string; bg: string; caption: string; hashtags: string } | null } = $props(); // sponsor: brand overlay while the photo slides in; donate: dummy donate popup once it lands
   let donateOpen = $state(true);
   let thanksOpen = $state(false);
   let amount = $state(5);
@@ -8,8 +9,8 @@
   let notFound = $state(false);
   let visible = $state(false);
 
-  const waCaption = `${sponsor ? `Presented by ${sponsor}. ` : ''}Group photo with dururu of @nkob.official, by @creka_community.`;
-  const igCaption = `${waCaption}\n#NKOB #A4ArtFair #GMBB #NokiiStudio #Dururu #creka_kiosk`; // WhatsApp gets the same line without the hashtags
+  const waCaption = `${sponsor ? `Presented by ${sponsor}. ` : ''}${skin?.caption ?? 'Group photo with dururu of @nkob.official, by @creka_community.'}`;
+  const igCaption = `${waCaption}\n${skin?.hashtags ?? '#NKOB #A4ArtFair #GMBB #NokiiStudio #Dururu #creka_kiosk'}`; // WhatsApp gets the same line without the hashtags
 
   let copied = $state<boolean | null>(null);
 
@@ -175,9 +176,9 @@
   </div>
 {/if}
 
-<div class="wrap">
-  <a class="by" href="https://www.instagram.com/creka_community?mdxt=MWd6Y3g3N2xtcnl2eQ==" target="_blank" rel="noopener" onclick={() => track('profile')}>Kiosk by Creka</a>
-  <img class="logo" src="/img/demo/camwithnkob/nkoblogo_b.svg" alt="Nkob" />
+<div class="wrap" style={skin ? `--bg: url('${skin.bg}')` : ''}>
+  {#if !skin}<a class="by" href="https://www.instagram.com/creka_community?mdxt=MWd6Y3g3N2xtcnl2eQ==" target="_blank" rel="noopener" onclick={() => track('profile')}>Kiosk by Creka</a>{/if}
+  <img class="logo" src={skin?.logo ?? '/img/demo/camwithnkob/nkoblogo_b.svg'} alt={skin ? 'Event' : 'Nkob'} />
   {#if !src}
     <p>No photo id given. Visit this page as <code>/photo?id=&lt;id&gt;</code>.</p>
   {:else if notFound}
@@ -207,7 +208,7 @@
       {/if}
     {/if}
   {/if}
-  <a class="by" href="https://creka.online" target="_blank" rel="noopener" onclick={() => track('creka')}>Powered by Creka</a>
+  <a class="by" href="https://creka.online" target="_blank" rel="noopener" onclick={() => track('creka')}>{#if skin}<img class="qiosk" src="/img/qiosk_by_creka_w.svg" alt="Qiosk by Creka" />{:else}Powered by Creka{/if}</a>
 </div>
 
 <style>
@@ -224,7 +225,7 @@
     align-items: center;
     justify-content: center;
     gap: 20px;
-    background: #0f1117 url("/img/demo/camwithnkob/bg.webp") center / cover no-repeat; /* same as the kiosk */
+    background: #0f1117 var(--bg, url("/img/demo/camwithnkob/bg.webp")) center / cover no-repeat; /* same as the kiosk */
     color: #e1e4ea;
     font-family: system-ui, -apple-system, sans-serif;
     overflow: hidden;
@@ -357,6 +358,10 @@
   .sponsor strong {
     font-size: 15vmin;
     letter-spacing: 0.05em;
+  }
+  img.qiosk {
+    width: 96px;
+    height: auto;
   }
   img.logo {
     position: absolute;

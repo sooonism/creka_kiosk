@@ -59,11 +59,12 @@
   let capturedInstant = $state(false);
   let capturedExitTimer: any = null;
   let savedPhotoId = $state<string | null>(null);
+  const photoPath = skin ? "/events/mbs/photo" : "/photo"; // the guest page the QR opens
   let qrSrc = $state<string | null>(null);
 
   $effect(() => {
     if (!savedPhotoId) return;
-    QRCode.toDataURL(`${location.origin}/photo?id=${savedPhotoId}${kioskQuery}&s=qr`, { margin: 1, width: 400 }).then(
+    QRCode.toDataURL(`${location.origin}${photoPath}?id=${savedPhotoId}${kioskQuery}&s=qr`, { margin: 1, width: 400 }).then(
       (url) => (qrSrc = url)
     );
   });
@@ -498,7 +499,7 @@
     if (!res.ok) return;
     const { id } = await res.json();
     savedPhotoId = id;
-    const qr = await QRCode.toDataURL(`${location.origin}/photo?id=${id}${kioskQuery}&s=qr`, { margin: 1, width: 400 });
+    const qr = await QRCode.toDataURL(`${location.origin}${photoPath}?id=${id}${kioskQuery}&s=qr`, { margin: 1, width: 400 });
     const shot = recentShots.find((s) => s.src === image);
     if (shot) shot.qr = qr;
   }
@@ -614,7 +615,7 @@
   <button onclick={() => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen())}>⛶ Fullscreen</button>
   <button class="snap" onclick={() => setStage("snapped")}>📷 Snap + preview</button>
   {#if savedPhotoId}
-    <a href={`/photo?id=${savedPhotoId}`} target="_blank">View saved photo</a>
+    <a href={`${photoPath}?id=${savedPhotoId}`} target="_blank">View saved photo</a>
   {/if}
 </aside>
 
