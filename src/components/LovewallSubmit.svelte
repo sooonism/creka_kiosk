@@ -213,7 +213,7 @@
     <LovewallBackdrop theme={look.template} />
     <main class="lw-page">
       <header class="lw-head">
-        {#if look.logo_path}<img class="lw-logo" src={MEDIA + look.logo_path} alt="" />{/if}
+        {#if look.logo_path}<img class="lw-logo" src={look.logo_path.startsWith('/uploads/') ? MEDIA + look.logo_path : look.logo_path} alt="" />{/if}
         <div class="lw-titles">
           <h1 class="lw-title">{look.title || campaignName || 'Leave a message'}</h1>
           {#if look.subtitle}<p class="lw-sub">{look.subtitle}</p>{/if}

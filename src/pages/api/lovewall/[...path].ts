@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { BACKEND } from '../../../lib/kiosks';
+import { LOCAL, post, wall } from '../../../lib/lovewall-local';
 
 export const prerender = false;
 
@@ -11,8 +12,26 @@ const AUTH: Record<string, string> = {
 };
 const LOVEWALL = /^[\w-]+\/(wall(\/state)?|queue|settings|logo|messages(\/\d+|\/bulk)?)$/;
 
+// a hardcoded slug uses the local stand-in until creka_backend has a campaign for it (checked at most every 30 s)
+const known = new Map<string, { at: number; backend: boolean }>();
+async function useLocal(slug: string) {
+  if (!LOCAL[slug]) return false;
+  const c = known.get(slug);
+  if (c && Date.now() - c.at < 30_000) return !c.backend;
+  const backend = await fetch(`${BACKEND}/api/v1/lovewall/${slug}/wall`).then((r) => r.ok).catch(() => false);
+  known.set(slug, { at: Date.now(), backend });
+  return !backend;
+}
+
 export const ALL: APIRoute = async ({ request, params, url }) => {
   const path = params.path ?? '';
+  const [slug, route] = path.split('/');
+  if (await useLocal(slug)) {
+    if (route === 'wall' && request.method === 'GET') return Response.json(await wall(slug), { headers: { 'Cache-Control': 'no-store' } });
+    if (path === `${slug}/wall/state`) return Response.json({ status: 1 });
+    if (path === `${slug}/messages` && request.method === 'POST') return post(slug, await request.formData());
+    return Response.json({ status: 0, message: 'Not available for this event' }, { status: 404 });
+  }
   const target = AUTH[path] ?? (LOVEWALL.test(path) ? `/api/v1/lovewall/${path}` : null);
   if (!target) return new Response('Not found', { status: 404 });
 

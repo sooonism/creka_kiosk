@@ -34,7 +34,8 @@
   let wantFs = $state(false); // the organiser asked for fullscreen: waiting for a tap on this screen
   let lastCmd: number | null = null;
 
-  const url = (p: string | null) => (p ? MEDIA + p : '');
+  // backend media is under /uploads; the hardcoded event's files are served by this site
+  const url = (p: string | null) => (p ? (p.startsWith('/uploads/') ? MEDIA + p : p) : '');
 
   async function load() {
     try {

@@ -188,7 +188,7 @@
     </div>
   {:else}
     <header>
-      <h1>Lovewall</h1>
+      <h1>{titleDraft || 'Lovewall'}</h1>
       <div class="links">
         <a href="/lovewall/{slug}/wall" target="_blank">Open wall ↗</a>
         <a href="/lovewall/{slug}" target="_blank">Guest page ↗</a>
@@ -357,6 +357,7 @@
       {/each}
     </div>
   {/if}
+  <a class="powered" href="https://creka.online" target="_blank" rel="noopener" aria-label="Qiosk by Creka"><img src="/img/qiosk_by_creka_w.svg" alt="" /></a>
 </div>
 
 <style>
@@ -369,6 +370,18 @@
     box-sizing: border-box;
     max-width: 880px;
     margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .powered {
+    margin: auto auto 8px;
+    padding-top: 32px;
+    line-height: 0;
+    opacity: 0.85;
+  }
+  .powered img {
+    width: 96px;
+    height: auto;
   }
   h1 {
     margin: 0;
@@ -376,8 +389,8 @@
   }
   header {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
+    gap: 10px;
     margin-bottom: 14px;
   }
   .links {

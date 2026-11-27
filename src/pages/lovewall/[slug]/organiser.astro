@@ -6,6 +6,6 @@ export const prerender = false;
 const { slug } = Astro.params;
 ---
 
-<Layout>
+<Layout powered={false}>
   <LovewallOrganiser slug={slug!} client:only="svelte" />
 </Layout>
