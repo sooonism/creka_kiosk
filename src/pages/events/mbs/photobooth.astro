@@ -15,3 +15,10 @@ const skin = {
 <Layout>
   <CamWithMbs src={nkob.src} {skin} client:load />
 </Layout>
+
+<style is:global>
+  /* light backdrop: always the black Qiosk logo, 20px further from the right edge */
+  .powered { right: 32px; }
+  .powered .pw-w { display: none; }
+  .powered .pw-b { display: block; }
+</style>
