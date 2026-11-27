@@ -6,7 +6,7 @@
   import LovewallPhoto from './LovewallPhoto.svelte';
   import { accentStyle, loadFonts, type Look } from '../lib/lovewall-theme';
 
-  let { slug }: { slug: string } = $props();
+  let { slug, guestPath }: { slug: string; guestPath?: string } = $props(); // guestPath: where the QR points (default /lovewall/<slug>)
 
   // media lives on creka_backend (/uploads), not on this server
   const MEDIA = import.meta.env.PUBLIC_BACKEND_URL ?? 'https://creka.online';
@@ -132,7 +132,7 @@
   };
 
   onMount(async () => {
-    qr = await QRCode.toDataURL(`${location.origin}/lovewall/${slug}`, { margin: 1, width: 240 });
+    qr = await QRCode.toDataURL(`${location.origin}${guestPath ?? `/lovewall/${slug}`}`, { margin: 1, width: 240 });
     await load();
     poll = setInterval(load, POLL_MS);
     document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && started && lock());
