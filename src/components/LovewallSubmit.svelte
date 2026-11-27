@@ -291,6 +291,10 @@
         {#if error}<p class="lw-err" role="alert">{error}</p>{/if}
         <button class="lw-btn" disabled={sending} onclick={send}>{sending ? (file ? `Sending… ${progress}%` : 'Sending…') : 'Send'}</button>
       {/if}
+      <!-- white logo on the dark templates, black on the light ones -->
+      <a class="lw-powered" href="https://creka.online" target="_blank" rel="noopener" aria-label="Qiosk by Creka">
+        <img src="/img/qiosk_by_creka_{['classic', 'elegant', 'hitech'].includes(look.template) ? 'w' : 'b'}.svg" alt="" />
+      </a>
     </main>
   </div>
 {/if}

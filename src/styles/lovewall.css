@@ -460,3 +460,7 @@ html:has(.lw[data-theme='garden']) { background: #f2f0e4; }
 .lw[data-theme] .lw-big .lw-stk { border: 0; border-radius: 0; box-shadow: none; max-height: none; object-fit: fill; }
 .lw[data-theme] .lw-ph.big .lw-ph-in { filter: drop-shadow(0 calc(var(--u) * 1.2) calc(var(--u) * 2) rgb(0 0 0 / 0.25)); }
 .lw[data-theme='festive'] .lw-ph.big .lw-ph-in { transform: rotate(-1.5deg); }
+
+/* "Qiosk by Creka" footer on the guest page */
+.lw-powered { display: block; margin: auto auto 8px; padding-top: 28px; line-height: 0; opacity: 0.85; }
+.lw-powered img { width: 96px; height: auto; }
